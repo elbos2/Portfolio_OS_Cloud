@@ -1,0 +1,31 @@
+- name: Install Netdata on all nodes
+  hosts: myhosts
+  become: true
+  vars:
+    ansible_port: 5995
+    ansible_user: ellaubo
+
+  tasks:
+    - name: Add Netdata repository
+      ansible.builtin.shell: |
+        wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh && sh /tmp/netdata-kickstart.sh --non-interactive
+
+    - name: Install Netdata
+      ansible.builtin.apt:
+        name: netdata
+        state: present
+        update_cache: yes
+
+    - name: Configure Netdata to listen on all interfaces
+      ansible.builtin.lineinfile:
+        path: /etc/netdata/netdata.conf
+        regexp: 'bind socket to IP'
+        line: '        bind socket to IP = 0.0.0.0'
+
+    - name: Allow Netdata port in UFW
+      ansible.builtin.command: ufw allow 19999/tcp
+
+    - name: Restart Netdata
+      ansible.builtin.systemd:
+        name: netdata
+        state: restarted
