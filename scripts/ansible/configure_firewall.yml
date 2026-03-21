@@ -1,0 +1,33 @@
+---
+- name: Configureer UFW firewall op WordPress VM's
+  hosts: wordpress
+  become: true
+
+  tasks:
+    - name: Installeer UFW
+      apt:
+        name: ufw
+        state: present
+
+    - name: Sta SSH toe
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Sta HTTP toe
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+
+    - name: Sta HTTPS toe
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+
+    - name: Zet UFW aan
+      ufw:
+        state: enabled
+        policy: deny
