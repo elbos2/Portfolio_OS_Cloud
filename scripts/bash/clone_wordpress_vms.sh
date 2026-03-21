@@ -32,6 +32,9 @@ for VMID in 101 102 103 104 105 106; do
     --storage ${STORAGE} \
     --target ${NODE}
 
+  # Verwijder cicustom van template
+  qm set ${VMID} --delete cicustom 2>/dev/null || true   
+
   echo "=== Configureer VM ${VMID} ==="
   if [ "${NODE}" == "pve-node1" ]; then
     qm set ${VMID} \
