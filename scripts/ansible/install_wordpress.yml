@@ -1,0 +1,16 @@
+---
+- name: Installeer WordPress op alle VM's
+  hosts: wordpress
+  become: true
+
+  tasks:
+    - name: Kopieer install script naar VM
+      copy:
+        src: ../bash/install_wordpress.sh
+        dest: /tmp/install_wordpress.sh
+        mode: '0755'
+
+    - name: Voer WordPress installatie script uit
+      command: bash /tmp/install_wordpress.sh
+      args:
+        creates: /var/www/html/wordpress/wp-config.php
