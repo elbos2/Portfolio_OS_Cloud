@@ -10,6 +10,14 @@
         shell: /bin/bash
         create_home: yes
 
+    - name: Maak .ssh map aan
+      file:
+        path: "/home/wpuser{{ ansible_host.split('.')[-1] }}/.ssh"
+        state: directory
+        owner: "wpuser{{ ansible_host.split('.')[-1] }}"
+        group: "wpuser{{ ansible_host.split('.')[-1] }}"
+        mode: '0700'
+
     - name: Genereer SSH keypair
       openssh_keypair:
         path: "/home/wpuser{{ ansible_host.split('.')[-1] }}/.ssh/id_rsa"
