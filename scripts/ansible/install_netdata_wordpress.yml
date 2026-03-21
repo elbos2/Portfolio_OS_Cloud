@@ -1,0 +1,25 @@
+---
+- name: Installeer Netdata op WordPress VM's
+  hosts: wordpress
+  become: true
+
+  tasks:
+    - name: Installeer Netdata via kickstart
+      ansible.builtin.shell: |
+        wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh && sh /tmp/netdata-kickstart.sh --non-interactive
+      args:
+        creates: /usr/sbin/netdata
+
+    - name: Configureer Netdata om te luisteren op alle interfaces
+      ansible.builtin.lineinfile:
+        path: /etc/netdata/netdata.conf
+        regexp: 'bind socket to IP'
+        line: '        bind socket to IP = 0.0.0.0'
+
+    - name: Sta Netdata poort toe in UFW
+      ansible.builtin.command: ufw allow 19999/tcp
+
+    - name: Herstart Netdata
+      ansible.builtin.systemd:
+        name: netdata
+        state: restarted
