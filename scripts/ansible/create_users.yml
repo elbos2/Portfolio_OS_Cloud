@@ -1,0 +1,29 @@
+---
+- name: Maak unieke gebruikers aan op WordPress VM's
+  hosts: wordpress
+  become: true
+
+  tasks:
+    - name: Maak gebruiker aan
+      user:
+        name: "wpuser{{ ansible_host.split('.')[-1] }}"
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Genereer SSH keypair
+      openssh_keypair:
+        path: "/home/wpuser{{ ansible_host.split('.')[-1] }}/.ssh/id_rsa"
+        owner: "wpuser{{ ansible_host.split('.')[-1] }}"
+        group: "wpuser{{ ansible_host.split('.')[-1] }}"
+      register: keypair
+
+    - name: Voeg public key toe aan authorized_keys
+      authorized_key:
+        user: "wpuser{{ ansible_host.split('.')[-1] }}"
+        key: "{{ keypair.public_key }}"
+
+    - name: Voeg gebruiker toe aan sudo groep
+      user:
+        name: "wpuser{{ ansible_host.split('.')[-1] }}"
+        groups: sudo
+        append: yes
