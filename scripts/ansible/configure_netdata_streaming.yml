@@ -1,0 +1,51 @@
+---
+# configure_netdata_streaming.yml
+# Configureert Netdata streaming van WordPress VM's en LXC's naar de parent node
+# Uitvoeren vanaf pve-node1:
+#   ansible-playbook scripts/ansible/configure_netdata_streaming.yml -i scripts/ansible/inventory.ini
+
+- name: Configureer Netdata parent om streaming te accepteren
+  hosts: netdata_parent
+  become: true
+
+  vars:
+    netdata_api_key: "c00lc00lc00l-c00l-c00l-c00l-c00lc00lc00l"
+
+  tasks:
+    - name: Configureer stream.conf op parent
+      blockinfile:
+        path: /etc/netdata/stream.conf
+        block: |
+          [{{ netdata_api_key }}]
+              enabled = yes
+        create: yes
+
+    - name: Herstart Netdata op parent
+      systemd:
+        name: netdata
+        state: restarted
+
+
+- name: Configureer Netdata children om te streamen naar parent
+  hosts: wordpress:lxc
+  become: true
+
+  vars:
+    netdata_parent_ip: "10.24.40.10"
+    netdata_api_key: "c00lc00lc00l-c00l-c00l-c00l-c00lc00lc00l"
+
+  tasks:
+    - name: Configureer stream.conf op child nodes
+      blockinfile:
+        path: /etc/netdata/stream.conf
+        block: |
+          [stream]
+              enabled = yes
+              destination = {{ netdata_parent_ip }}:19999
+              api key = {{ netdata_api_key }}
+        create: yes
+
+    - name: Herstart Netdata op child nodes
+      systemd:
+        name: netdata
+        state: restarted
