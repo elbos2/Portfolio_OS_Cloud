@@ -5,6 +5,11 @@
 ### Proxmox
 Proxmox cluster (cluster-95003) opgezet met drie nodes: pve-node1 (10.24.40.2), pve-node2 (10.24.40.3) en pve-node3 (10.24.40.4). Ceph is geïnstalleerd als shared storage met HEALTH_OK status en 900GiB beschikbaar via ceph-pool (RBD).
 
+**Toegang per node:**
+- pve-node1: gebruiker `root`, SSH op standaard poort 22
+- pve-node2: root login uitgeschakeld, gebruiker `ellaubo` (wachtwoord: `pannenkoekenmetstroop23$%`), SSH op poort 5995
+- pve-node3: root login uitgeschakeld, gebruiker `ellaubo` (wachtwoord: `pannenkoekenmetstroop23$%`), SSH op poort 5995
+
 Screenshots: 1_OverviewProxMox, 2_Netwerkinstellingen_Container_9500304, 3_Netwerkinstellingen_Container_9500305, 4_Cluster_Overview, 5a_Ceph_Health, 5b_Ceph_Status, 5c_Ceph_Storage, 6_Repo_Overview
 
 ### Monitoring

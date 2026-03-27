@@ -1,15 +1,27 @@
 ---
 # create_lxc_wordpress.yml
 # Aanmaken van 3 LXC containers met WordPress voor Klant 1
-# Uitvoeren vanaf pve-node1 als root:
-#   ansible-playbook create_lxc_wordpress.yml -i inventory.ini
+# Uitvoeren vanaf pve-node1:
+#   ansible-playbook scripts/ansible/create_lxc_wordpress.yml -i scripts/ansible/inventory.ini
+
+- name: Kopieer WordPress installatiescript naar alle Proxmox nodes
+  hosts: proxmox_nodes
+  become: true
+
+  tasks:
+    - name: Kopieer install_wordpress.sh naar /tmp op elke node
+      copy:
+        src: ../bash/install_wordpress.sh
+        dest: /tmp/install_wordpress.sh
+        mode: '0755'
+
 
 - name: Maak WordPress LXC containers aan op Proxmox nodes
   hosts: proxmox_nodes
   become: true
 
   vars:
-    template: "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst"
+    template: "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
     storage: "local-lvm"
     memory: 1024
     cores: 1
@@ -24,15 +36,15 @@
 
   tasks:
     - name: Controleer of template aanwezig is
-      shell: pveam list local | grep "debian-12-standard"
+      shell: pveam list local | grep "ubuntu-24.04-standard"
       register: template_check
       ignore_errors: true
       changed_when: false
 
-    - name: Download Debian 12 template als niet aanwezig
+    - name: Download Ubuntu 24.04 template als niet aanwezig
       shell: |
         pveam update
-        pveam download local debian-12-standard_12.7-1_amd64.tar.zst
+        pveam download local ubuntu-24.04-standard_24.04-2_amd64.tar.zst
       when: template_check.rc != 0
 
     - name: Maak LXC container aan
@@ -58,11 +70,11 @@
       when: item.node == inventory_hostname
       ignore_errors: true
 
-    - name: Wacht tot container opgestart is
+    - name: Wacht tot container volledig opgestart is
       pause:
         seconds: 10
 
-    - name: Stel DNS in
+    - name: Stel DNS in container in
       shell: pct exec {{ item.id }} -- bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"
       loop: "{{ containers }}"
       when: item.node == inventory_hostname
@@ -72,29 +84,13 @@
       loop: "{{ containers }}"
       when: item.node == inventory_hostname
 
-    - name: Voer WordPress installatie uit
+    - name: Voer WordPress installatie uit in container
       shell: pct exec {{ item.id }} -- bash /tmp/install_wordpress.sh
-      args:
-        creates: "/proc/$(pct exec {{ item.id }} -- cat /var/run/apache2/apache2.pid 2>/dev/null || echo 0)/status"
       loop: "{{ containers }}"
       when: item.node == inventory_hostname
-      register: wp_install
-      changed_when: wp_install.rc == 0
 
     - name: Toon WordPress URL per container
       debug:
         msg: "WordPress bereikbaar op: http://{{ item.ip | regex_replace('/.*', '') }}/wordpress"
       loop: "{{ containers }}"
       when: item.node == inventory_hostname
-
-
-- name: Kopieer WordPress installatiescript naar alle Proxmox nodes
-  hosts: proxmox_nodes
-  become: true
-
-  tasks:
-    - name: Kopieer install_wordpress.sh naar /tmp op elke node
-      copy:
-        src: ../bash/install_wordpress.sh
-        dest: /tmp/install_wordpress.sh
-        mode: '0755'
