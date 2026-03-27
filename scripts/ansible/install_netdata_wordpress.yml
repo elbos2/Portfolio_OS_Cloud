@@ -1,6 +1,6 @@
 ---
 - name: Installeer Netdata op WordPress VM's
-  hosts: wordpress
+  hosts: all
   become: true
 
   tasks:
