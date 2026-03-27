@@ -5,6 +5,9 @@
 ### Proxmox
 Proxmox cluster (cluster-95003) opgezet met drie nodes: pve-node1 (10.24.40.2), pve-node2 (10.24.40.3) en pve-node3 (10.24.40.4). Ceph is geïnstalleerd als shared storage met HEALTH_OK status en 900GiB beschikbaar via ceph-pool (RBD).
 
+**Infrastructuur opbouw:**
+pve-node1, pve-node2 en pve-node3 zijn geen fysieke machines maar VM's die draaien op een bovenliggende Proxmox omgeving (PVEDT01, PVEDT02, PVEDT03). De Netdata monitoring container (9500304 / 95003-LXC, IP 10.24.40.10) draait op PVEDT01 en valt buiten het cluster-95003. Dit betekent dat deze container niet bereikbaar is via `pct exec` vanuit pve-node1 en apart geconfigureerd moet worden via de Proxmox console van PVEDT01.
+
 **Toegang per node:**
 - pve-node1: gebruiker `root`, SSH op standaard poort 22
 - pve-node2: root login uitgeschakeld, gebruiker `ellaubo` (wachtwoord: `pannenkoekenmetstroop23$%`), SSH op poort 5995
@@ -13,7 +16,10 @@ Proxmox cluster (cluster-95003) opgezet met drie nodes: pve-node1 (10.24.40.2), 
 Screenshots: 1_OverviewProxMox, 2_Netwerkinstellingen_Container_9500304, 3_Netwerkinstellingen_Container_9500305, 4_Cluster_Overview, 5a_Ceph_Health, 5b_Ceph_Status, 5c_Ceph_Storage, 6_Repo_Overview
 
 ### Monitoring
-Netdata wordt gebruikt als monitoring tool voor het Proxmox cluster. Gekozen vanwege eenvoudige installatie, lichtgewicht en overzichtelijk dashboard. De monitoring container (95003-LXC) fungeert als parent node. pve-node1, pve-node2 en pve-node3 streamen als child nodes naar de parent. Installatie geautomatiseerd via Ansible playbook.
+Netdata wordt gebruikt als monitoring tool voor het Proxmox cluster. Gekozen vanwege eenvoudige installatie, lichtgewicht en overzichtelijk dashboard. De monitoring container (9500304 / 95003-LXC, IP 10.24.40.10) fungeert als parent node en draait op PVEDT01. pve-node1, pve-node2 en pve-node3 streamen als child nodes naar de parent. Installatie geautomatiseerd via Ansible playbook.
+
+**Netdata streaming configuratie:**
+Omdat de parent container buiten cluster-95003 valt, is de streaming op de parent handmatig geconfigureerd via de Proxmox console van PVEDT01. De child nodes (pve-nodes, WordPress VM's en LXC's) worden geconfigureerd via het Ansible playbook `configure_netdata_streaming.yml` met API key `c00lc00lc00l-c00l-c00l-c00l-c00lc00lc00l`.
 
 Screenshots: 7a_Monitoring_Netdata_Installatie, 7b_Monitoring_Netdata_Dashboard, 7c_Monitoring_Netdata_VMs, 7d_Monitoring_Netdata_node1, 7e_Monitoring_Netdata_node2, 7f_Monitoring_Netdata_node3, 7g_Monitoring_Netdata_Dashboard_Nodes
 
