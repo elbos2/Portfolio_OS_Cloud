@@ -50,3 +50,7 @@
    - 11a. 11a_LXC_bash - Bash script create_lxc_wordpress.sh succesvol uitgevoerd op pve-node1, WordPress geïnstalleerd in CT 201 via pct exec, bereikbaar op http://10.24.40.31/wordpress
    - 11b. 11b_LXC_created - CT 201 (wordpress-lxc-1) zichtbaar in Proxmox GUI, running op pve-node1, Ubuntu, IP 10.24.40.31, unprivileged
    - 11c. 11c_LXC_wordpress_installed - WordPress site bereikbaar in browser op http://10.24.40.31/wordpress (CT 201)
+   - 11d. 11d_LXC_wordpress_ansible - Ansible playbook create_lxc_wordpress.yml uitgevoerd, CT 202 en 203 aangemaakt en WordPress geïnstalleerd, PLAY RECAP toont failed=0 op alle 3 nodes
+   - 11e. 11e_LXC_wordpress_ansible_created - Proxmox GUI toont CT 202 (wordpress-lxc-2) op pve-node2 en CT 203 (wordpress-lxc-3) op pve-node3, beide running
+   - 11f. 11f_LXC2_wordpress - WordPress site bereikbaar in browser op http://10.24.40.32/wordpress (CT 202, pve-node2)
+   - 11g. 11g_LXC3_wordpress - WordPress site bereikbaar in browser op http://10.24.40.33/wordpress (CT 203, pve-node3)

@@ -59,6 +59,6 @@ Klant 1 wil WordPress voor trainingsdoeleinden, focus op lage kosten. Gekozen vo
 **Uitrol stappen (DevOps-methodiek: bash → Ansible):**
 
 1. **Bash script** `create_lxc_wordpress.sh` maakt CT 201 aan op pve-node1 (Ubuntu 24.04, local-lvm, IP 10.24.40.31), start de container en voert `install_wordpress.sh` uit via `pct exec`
-2. **Ansible** `create_lxc_wordpress.yml` — CT 202 en 203 uitgerold op pve-node2 en pve-node3 *(volgt)*
+2. **Ansible** `create_lxc_wordpress.yml` — CT 202 (10.24.40.32) op pve-node2 en CT 203 (10.24.40.33) op pve-node3 aangemaakt en WordPress geïnstalleerd, PLAY RECAP `failed=0` op alle nodes
 
-Screenshots: 11a_LXC_bash, 11b_LXC_created, 11c_LXC_wordpress_installed
+Screenshots: 11a_LXC_bash, 11b_LXC_created, 11c_LXC_wordpress_installed, 11d_LXC_wordpress_ansible, 11e_LXC_wordpress_ansible_created, 11f_LXC2_wordpress, 11g_LXC3_wordpress
