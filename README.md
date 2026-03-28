@@ -23,6 +23,20 @@ Omdat de parent container buiten cluster-95003 valt, is de streaming op de paren
 
 Screenshots: 7a_Monitoring_Netdata_Installatie, 7b_Monitoring_Netdata_Dashboard, 7c_Monitoring_Netdata_VMs, 7d_Monitoring_Netdata_node1, 7e_Monitoring_Netdata_node2, 7f_Monitoring_Netdata_node3, 7g_Monitoring_Netdata_Dashboard_Nodes
 
+### Grafana + Prometheus (uitbreiding monitoring)
+Netdata v2 (de huidige stabiele versie) heeft een beperking in de lokale dashboard: maximaal 5 nodes zichtbaar zonder Netdata Cloud account. Omdat het cluster meer dan 5 nodes heeft (pve-node1/2/3 + 6 WordPress VM's + 3 LXC's), is gekozen voor Grafana als alternatief dashboard zonder node-limieten.
+
+**Architectuur:**
+- **Netdata** blijft op alle nodes draaien als metrics collector en streamt naar de parent (95003-LXC, 10.24.40.10)
+- **Prometheus** (op de Grafana VM) scrapt metrics van alle nodes individueel via de Netdata Prometheus endpoint (`/api/v1/allmetrics?format=prometheus`)
+- **Grafana** visualiseert de Prometheus data en maakt het mogelijk om per node te filteren via de Instance dropdown
+
+**Grafana VM:** VM 123 op pve-node1, IP 10.24.40.11, Ubuntu 24.04. Aangemaakt als clone van de ubuntu-2404-cloudinit-template. Installatie geautomatiseerd via Ansible playbook `install_grafana_prometheus.yml`.
+
+**Dashboard:** Netdata community dashboard (ID 7107) geïmporteerd in Grafana. Instance variabele geconfigureerd op `label_values(netdata_system_cpu_percentage_average, instance)` zodat alle nodes selecteerbaar zijn.
+
+Screenshots: 7h_Grafana_Dashboard, 7i_Grafana_Nodes
+
 ## 2. Uitrol van applicaties voor klanten volgens DevOps-methodiek
 
 ### Cloud-init template

@@ -1,0 +1,93 @@
+---
+# install_grafana_prometheus.yml
+# Installeert Grafana en Prometheus op de grafana VM (10.24.40.11)
+# Prometheus scrapt Netdata metrics van alle nodes
+# Grafana visualiseert de metrics via Prometheus datasource
+# Uitvoeren vanaf pve-node1:
+#   ansible-playbook scripts/ansible/install_grafana_prometheus.yml -i scripts/ansible/inventory.ini
+
+- name: Installeer Prometheus en Grafana
+  hosts: grafana
+  become: true
+
+  vars:
+    netdata_parent_ip: "10.24.40.10"
+    netdata_nodes:
+      - "10.24.40.21:19999"
+      - "10.24.40.22:19999"
+      - "10.24.40.23:19999"
+      - "10.24.40.24:19999"
+      - "10.24.40.25:19999"
+      - "10.24.40.26:19999"
+      - "10.24.40.31:19999"
+      - "10.24.40.32:19999"
+      - "10.24.40.33:19999"
+
+  tasks:
+    - name: Installeer benodigde packages
+      apt:
+        name:
+          - apt-transport-https
+          - software-properties-common
+          - wget
+          - prometheus
+        state: present
+        update_cache: yes
+
+    - name: Voeg Grafana GPG key toe
+      shell: wget -q -O /usr/share/keyrings/grafana.key https://apt.grafana.com/gpg.key
+      args:
+        creates: /usr/share/keyrings/grafana.key
+
+    - name: Voeg Grafana repository toe
+      copy:
+        dest: /etc/apt/sources.list.d/grafana.list
+        content: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main\n"
+
+    - name: Installeer Grafana
+      apt:
+        name: grafana
+        state: present
+        update_cache: yes
+
+    - name: Configureer Prometheus om Netdata te scrapen
+      copy:
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'netdata'
+              metrics_path: '/api/v1/allmetrics'
+              params:
+                format: [prometheus]
+              static_configs:
+                - targets: ['{{ netdata_parent_ip }}:19999']
+
+            - job_name: 'netdata-nodes'
+              metrics_path: '/api/v1/allmetrics'
+              params:
+                format: [prometheus]
+              static_configs:
+                - targets:
+                  {% for node in netdata_nodes %}
+                  - '{{ node }}'
+                  {% endfor %}
+
+    - name: Start en enable Prometheus
+      systemd:
+        name: prometheus
+        state: restarted
+        enabled: yes
+
+    - name: Start en enable Grafana
+      systemd:
+        name: grafana-server
+        state: restarted
+        enabled: yes
