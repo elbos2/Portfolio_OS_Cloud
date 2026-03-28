@@ -12,13 +12,18 @@
     netdata_api_key: "c00lc00lc00l-c00l-c00l-c00l-c00lc00lc00l"
 
   tasks:
-    - name: Configureer stream.conf op parent
-      blockinfile:
-        path: /etc/netdata/stream.conf
-        block: |
+    - name: Schrijf stream.conf op parent
+      copy:
+        dest: /etc/netdata/stream.conf
+        content: |
+          [stream]
+              enabled = yes
+
           [{{ netdata_api_key }}]
               enabled = yes
-        create: yes
+        owner: netdata
+        group: netdata
+        mode: '0640'
 
     - name: Herstart Netdata op parent
       systemd:
@@ -35,15 +40,17 @@
     netdata_api_key: "c00lc00lc00l-c00l-c00l-c00l-c00lc00lc00l"
 
   tasks:
-    - name: Configureer stream.conf op child nodes
-      blockinfile:
-        path: /etc/netdata/stream.conf
-        block: |
+    - name: Schrijf stream.conf op child nodes
+      copy:
+        dest: /etc/netdata/stream.conf
+        content: |
           [stream]
               enabled = yes
               destination = {{ netdata_parent_ip }}:19999
               api key = {{ netdata_api_key }}
-        create: yes
+        owner: netdata
+        group: netdata
+        mode: '0640'
 
     - name: Herstart Netdata op child nodes
       systemd:
