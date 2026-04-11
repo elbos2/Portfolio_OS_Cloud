@@ -1,6 +1,8 @@
 # Portfolio Opdracht 2
 
 ## Inhoudsopgave
+
+### Opdracht 1 - Docker basis en Swarm
 1. [Voorbereiding](#1-voorbereiding)
 2. [Les 4 - Docker installatie en basiscontrole](#2-les-4---docker-installatie-en-basiscontrole)
 3. [Les 7 - Dockerfile, image build en container](#3-les-7---dockerfile-image-build-en-container)
@@ -8,6 +10,13 @@
 5. [Les 9 - Docker Swarm](#5-les-9---docker-swarm)
 6. [Extra - Geautomatiseerd uitvoeren via Ansible](#6-extra---geautomatiseerd-uitvoeren-via-ansible)
 7. [Basic Docker Networking](#7-basic-docker-networking)
+
+### Opdracht 2 - MySQL containers in aparte subnetten
+8. [MySQL containers in aparte subnetten](#8-mysql-containers-in-aparte-subnetten)
+
+---
+
+## Opdracht 1 - Docker basis en Swarm
 
 ---
 
@@ -116,8 +125,8 @@ Een swarmcluster opzetten met 3 managers (1 per Proxmox-node).
 Vanaf de swarm-stap is de setup geautomatiseerd uitgevoerd met Ansible.
 
 Gebruikte bestanden:
-- scripts/ansible/inventory.ini
-- scripts/ansible/docker_swarm_setup.yml
+- `scripts/ansible/inventory.ini`
+- `scripts/ansible/docker_swarm_setup.yml`
 
 Playbook resultaat:
 - mgr1 als leader
@@ -126,49 +135,7 @@ Playbook resultaat:
 
 ---
 
-## 7. MySQL Containers in aparte subnetten
-
-### Doel
-
-Twee MySQL containers opstarten in aparte Docker-subnetten, de bereikbaarheid testen vanuit het Proxmox-subnet en tussen de containers onderling, en eventueel de connectiviteit herstellen.
-
-### Docker subnetten uitgelegd
-
-Docker maakt standaard één bridge-netwerk aan waarop alle containers met elkaar kunnen communiceren. Door containers in **aparte subnetten** te plaatsen, isoleer je ze van elkaar — ze kunnen dan niet meer zomaar onderling communiceren.
-
-Dit is nuttig voor:
-- **Beveiliging**: een database-container is niet bereikbaar vanuit een frontend-container tenzij je dat expliciet toestaat
-- **Multi-tenant omgevingen**: meerdere klanten of applicaties delen dezelfde host maar zijn netwerktechnisch gescheiden
-- **Microservices**: elke service heeft zijn eigen netwerksegment, waardoor blast radius bij een incident beperkt blijft
-
-### Opzet
-
-Twee MySQL containers in aparte subnetten via Docker Compose:
-
-| Container | Subnet       | IP           | Gepubliceerde poort |
-|-----------|-------------|--------------|---------------------|
-| mysql1    | 172.20.0.0/24 | 172.20.0.10 | 3306                |
-| mysql2    | 172.21.0.0/24 | 172.21.0.10 | 3307                |
-
-Gebruikte bestanden:
-- `scripts/docker/mysql-subnets/docker-compose.yml`
-- `scripts/bash/test_mysql_subnets.sh`
-
-### Uitvoering
-
-1. Containers gestart met `docker compose up -d`
-2. Bereikbaarheid vanuit host getest via `nc` op poorten 3306 en 3307 → **bereikbaar** via gepubliceerde poorten
-3. Connectiviteit tussen containers getest → **niet bereikbaar** (aparte subnetten)
-4. Fix toegepast: mysql1 toegevoegd aan subnet-b via `docker network connect`
-5. Opnieuw getest → **bereikbaar**
-
-### Bewijs
-
-*Screenshots toevoegen na uitvoering.*
-
----
-
-## 8. Basic Docker Networking
+## 7. Basic Docker Networking
 
 ### Doel
 
@@ -187,3 +154,56 @@ De basis Docker-netwerkcommando's uitvoeren via een script dat de commando's é�
 ![Networking script uitvoer deel 1](docs/screenshots/14m_Opdracht2_RunNetworkingCommands.png)
 
 ![Networking script uitvoer deel 2](docs/screenshots/14n_Opdracht2_RunNetworkingCommands.png)
+
+---
+
+## Opdracht 2 - MySQL containers in aparte subnetten
+
+---
+
+## 8. MySQL containers in aparte subnetten
+
+### Doel
+
+Twee MySQL containers opstarten in aparte Docker-subnetten, de bereikbaarheid testen vanuit het Proxmox-subnet en tussen de containers onderling, en eventueel de connectiviteit herstellen.
+
+### Docker subnetten uitgelegd
+
+Docker maakt standaard één bridge-netwerk aan waarop alle containers met elkaar kunnen communiceren. Door containers in **aparte subnetten** te plaatsen, isoleer je ze van elkaar — ze kunnen dan niet meer zomaar onderling communiceren.
+
+Dit is nuttig voor:
+- **Beveiliging**: een database-container is niet bereikbaar vanuit een frontend-container tenzij je dat expliciet toestaat
+- **Multi-tenant omgevingen**: meerdere klanten of applicaties delen dezelfde host maar zijn netwerktechnisch gescheiden
+- **Microservices**: elke service heeft zijn eigen netwerksegment, waardoor blast radius bij een incident beperkt blijft
+
+### Opzet
+
+Twee MySQL containers in aparte subnetten via Docker Compose:
+
+| Container | Subnet        | IP           | Gepubliceerde poort |
+|-----------|---------------|--------------|---------------------|
+| mysql1    | 172.20.0.0/24 | 172.20.0.10  | 3306                |
+| mysql2    | 172.21.0.0/24 | 172.21.0.10  | 3307                |
+
+Gebruikte bestanden:
+- `scripts/docker/mysql-subnets/docker-compose.yml`
+- `scripts/ansible/deploy_mysql_subnets.yml`
+
+### Uitvoering
+
+De setup is geautomatiseerd via Ansible en uitgerold op alle drie Docker-hosts:
+
+```bash
+ansible-playbook -i inventory.ini deploy_mysql_subnets.yml
+```
+
+1. Docker Compose bestand gekopieerd naar elke host
+2. Containers gestart met `docker compose up -d`
+3. Bereikbaarheid vanuit host getest op poorten 3306 en 3307 → **bereikbaar**
+4. Connectiviteit tussen containers getest → **niet bereikbaar** (aparte subnetten)
+5. Fix toegepast: mysql1 toegevoegd aan subnet-b via `docker network connect`
+6. Opnieuw getest → **bereikbaar**
+
+### Bewijs
+
+*Screenshots toevoegen na uitvoering.*

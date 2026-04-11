@@ -1,0 +1,115 @@
+---
+- name: Deploy MySQL containers in aparte subnetten
+  hosts: docker_managers
+  become: true
+  gather_facts: false
+
+  vars:
+    compose_dest: /home/ubuntu/mysql-subnets
+
+  tasks:
+    - name: Doelmap aanmaken
+      ansible.builtin.file:
+        path: "{{ compose_dest }}"
+        state: directory
+        owner: ubuntu
+        mode: '0755'
+
+    - name: Docker Compose bestand kopiëren
+      ansible.builtin.copy:
+        src: ../docker/mysql-subnets/docker-compose.yml
+        dest: "{{ compose_dest }}/docker-compose.yml"
+        owner: ubuntu
+        mode: '0644'
+
+    - name: Bestaande containers stoppen en verwijderen
+      ansible.builtin.command: docker compose down
+      args:
+        chdir: "{{ compose_dest }}"
+      ignore_errors: true
+      changed_when: false
+
+    - name: MySQL containers starten
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ compose_dest }}"
+      register: compose_up
+
+    - name: Wachten tot MySQL klaar is
+      ansible.builtin.wait_for:
+        port: 3306
+        host: 127.0.0.1
+        delay: 10
+        timeout: 60
+
+    - name: Netwerken tonen
+      ansible.builtin.command: docker network ls
+      register: network_list
+      changed_when: false
+
+    - name: Netwerken output
+      ansible.builtin.debug:
+        var: network_list.stdout_lines
+
+    - name: Bereikbaarheid mysql1 testen (poort 3306)
+      ansible.builtin.wait_for:
+        port: 3306
+        host: 127.0.0.1
+        timeout: 10
+      register: mysql1_check
+      ignore_errors: true
+
+    - name: Bereikbaarheid mysql2 testen (poort 3307)
+      ansible.builtin.wait_for:
+        port: 3307
+        host: 127.0.0.1
+        timeout: 10
+      register: mysql2_check
+      ignore_errors: true
+
+    - name: Resultaat bereikbaarheid
+      ansible.builtin.debug:
+        msg:
+          - "mysql1 (3306): {{ 'BEREIKBAAR' if mysql1_check is succeeded else 'NIET BEREIKBAAR' }}"
+          - "mysql2 (3307): {{ 'BEREIKBAAR' if mysql2_check is succeeded else 'NIET BEREIKBAAR' }}"
+
+    - name: Connectiviteit tussen containers testen (verwacht niet bereikbaar)
+      ansible.builtin.command: docker exec mysql1 ping -c 2 172.21.0.10
+      register: ping_result
+      ignore_errors: true
+      changed_when: false
+
+    - name: Ping resultaat voor fix
+      ansible.builtin.debug:
+        msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if ping_result.rc == 0 else 'NIET BEREIKBAAR (aparte subnetten)' }}"
+
+    - name: Fix toepassen - mysql1 toevoegen aan subnet-b
+      ansible.builtin.command: docker network connect mysql-subnets_subnet-b mysql1
+      ignore_errors: true
+      changed_when: true
+
+    - name: Connectiviteit opnieuw testen na fix
+      ansible.builtin.command: docker exec mysql1 ping -c 2 172.21.0.10
+      register: ping_result_after
+      ignore_errors: true
+      changed_when: false
+
+    - name: Ping resultaat na fix
+      ansible.builtin.debug:
+        msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if ping_result_after.rc == 0 else 'NIET BEREIKBAAR' }}"
+
+    - name: Netwerk inspecteren (subnet-a)
+      ansible.builtin.command: docker network inspect mysql-subnets_subnet-a
+      register: subnet_a
+      changed_when: false
+
+    - name: Netwerk inspecteren (subnet-b)
+      ansible.builtin.command: docker network inspect mysql-subnets_subnet-b
+      register: subnet_b
+      changed_when: false
+
+    - name: Subnet overzicht
+      ansible.builtin.debug:
+        msg:
+          - "subnet-a: {{ subnet_a.stdout }}"
+          - "subnet-b: {{ subnet_b.stdout }}"
