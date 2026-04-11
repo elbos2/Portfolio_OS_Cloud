@@ -20,19 +20,24 @@
         update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
       changed_when: false
 
-    - name: Configureer Docker daemon - zet iptables uit
-      ansible.builtin.copy:
-        dest: /etc/docker/daemon.json
-        content: |
-          {
-            "iptables": false
-          }
-        mode: '0644'
+    - name: Verwijder daemon.json indien aanwezig
+      ansible.builtin.file:
+        path: /etc/docker/daemon.json
+        state: absent
 
     - name: Stop Docker
       ansible.builtin.systemd:
         name: docker
         state: stopped
+
+    - name: Maak Docker iptables chains handmatig aan
+      ansible.builtin.shell: |
+        /usr/sbin/iptables-legacy -t nat -N DOCKER 2>/dev/null || true
+        /usr/sbin/iptables-legacy -t filter -N DOCKER 2>/dev/null || true
+        /usr/sbin/iptables-legacy -t filter -N DOCKER-ISOLATION-STAGE-1 2>/dev/null || true
+        /usr/sbin/iptables-legacy -t filter -N DOCKER-ISOLATION-STAGE-2 2>/dev/null || true
+        /usr/sbin/iptables-legacy -t filter -N DOCKER-USER 2>/dev/null || true
+      changed_when: false
 
     - name: Start Docker opnieuw
       ansible.builtin.systemd:
@@ -42,9 +47,7 @@
     - name: Wacht tot Docker volledig klaar is
       ansible.builtin.shell: |
         for i in $(seq 1 30); do
-          docker info > /dev/null 2>&1 && \
-          iptables -t nat -L DOCKER > /dev/null 2>&1 && \
-          break
+          docker info > /dev/null 2>&1 && break
           sleep 1
         done
       changed_when: false
