@@ -1,6 +1,6 @@
 ---
 - name: Deploy MySQL containers in aparte subnetten
-  hosts: docker_managers
+  hosts: mgr1
   become: true
   gather_facts: false
 
