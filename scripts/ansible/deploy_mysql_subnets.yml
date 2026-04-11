@@ -73,14 +73,14 @@
           - "mysql2 (3307): {{ 'BEREIKBAAR' if mysql2_check is succeeded else 'NIET BEREIKBAAR' }}"
 
     - name: Connectiviteit tussen containers testen (verwacht niet bereikbaar)
-      ansible.builtin.command: docker exec mysql1 bash -c "timeout 3 bash -c 'echo > /dev/tcp/192.168.101.10/3306'"
-      register: tcp_result
+      ansible.builtin.command: docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
+      register: mysql_result
       ignore_errors: true
       changed_when: false
 
     - name: Verbinding resultaat voor fix
       ansible.builtin.debug:
-        msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if tcp_result.rc == 0 else 'NIET BEREIKBAAR (aparte subnetten)' }}"
+        msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if mysql_result.rc == 0 else 'NIET BEREIKBAAR (aparte subnetten)' }}"
 
     - name: Fix toepassen - mysql1 toevoegen aan subnet-b
       ansible.builtin.command: docker network connect mysql-subnets_subnet-b mysql1
@@ -88,14 +88,14 @@
       changed_when: true
 
     - name: Connectiviteit opnieuw testen na fix
-      ansible.builtin.command: docker exec mysql1 bash -c "timeout 3 bash -c 'echo > /dev/tcp/192.168.101.10/3306'"
-      register: tcp_result_after
+      ansible.builtin.command: docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
+      register: mysql_result_after
       ignore_errors: true
       changed_when: false
 
     - name: Verbinding resultaat na fix
       ansible.builtin.debug:
-        msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if tcp_result_after.rc == 0 else 'NIET BEREIKBAAR' }}"
+        msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if mysql_result_after.rc == 0 else 'NIET BEREIKBAAR' }}"
 
     - name: Netwerk inspecteren (subnet-a)
       ansible.builtin.command: docker network inspect mysql-subnets_subnet-a
