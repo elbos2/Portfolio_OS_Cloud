@@ -1,0 +1,70 @@
+---
+- name: Initialize swarm manager on mgr1
+  hosts: mgr1
+  become: true
+  gather_facts: false
+  vars:
+    swarm_manager_ip: 10.24.40.22
+  tasks:
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Check current swarm state on manager
+      ansible.builtin.command: docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}'
+      register: mgr1_swarm_state
+      changed_when: false
+
+    - name: Initialize swarm on manager if inactive
+      ansible.builtin.command: docker swarm init --advertise-addr {{ swarm_manager_ip }}
+      when: mgr1_swarm_state.stdout == "inactive"
+
+    - name: Get manager join token
+      ansible.builtin.command: docker swarm join-token -q manager
+      register: manager_join_token
+      changed_when: false
+
+    - name: Share manager token to other plays
+      ansible.builtin.set_fact:
+        swarm_manager_token: "{{ manager_join_token.stdout }}"
+
+- name: Join mgr2 and mgr3 as managers
+  hosts: mgr2,mgr3
+  become: true
+  gather_facts: false
+  vars:
+    swarm_manager_ip: 10.24.40.22
+  tasks:
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Check current swarm state on node
+      ansible.builtin.command: docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}'
+      register: node_swarm_state
+      changed_when: false
+
+    - name: Join node as manager if inactive
+      ansible.builtin.command: >-
+        docker swarm join
+        --token {{ hostvars['mgr1']['swarm_manager_token'] }}
+        {{ swarm_manager_ip }}:2377
+      when: node_swarm_state.stdout == "inactive"
+
+- name: Validate swarm cluster
+  hosts: mgr1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Show swarm nodes
+      ansible.builtin.command: docker node ls
+      register: swarm_nodes
+      changed_when: false
+
+    - name: Print swarm node output
+      ansible.builtin.debug:
+        var: swarm_nodes.stdout_lines

@@ -95,7 +95,7 @@ ansible-playbook scripts/ansible/install_grafana_prometheus.yml -i scripts/ansib
 
 ## 2. Klant 2 — WordPress op VM's met hoge beschikbaarheid
 
-Klant 2 gebruikt WordPress als CRM-applicatie en stelt hoge eisen aan beschikbaarheid en beveiliging. Gekozen voor VM's vanwege betere isolatie en ondersteuning voor Proxmox HA.
+Klant 2 gebruikt WordPress als CRM-applicatie en stelt hoge eisen aan beschikbaarheid en beveiliging. Gekozen voor VM's vanwege betere isolatie en ondersteuning voor Proxmox HA. Per abuis 6 VM's geïnstalleerd in plaats van 3, de overige 3 worden hergebruikt voor de Docker opdracht (Portfolio_Opdracht2).
 
 ### 2.1 Cloud-init template
 
@@ -115,7 +115,7 @@ Ubuntu 24.04 cloud-init template (VM 9000) aangemaakt op ceph-pool als golden im
 
 ### 2.2 Handmatige installatie (voorbereiding)
 
-WordPress eerst handmatig geïnstalleerd in container 9500305 als voorbereiding op automatisering — DevOps-methodiek: eerst begrijpen, dan automatiseren.
+WordPress eerst handmatig geïnstalleerd in container 9500305 als voorbereiding op automatisering
 
 ![WordPress Apache](docs/screenshots/9a_9500305_Wordpress_Apache.png)
 
@@ -131,16 +131,16 @@ WordPress eerst handmatig geïnstalleerd in container 9500305 als voorbereiding 
 
 ### 2.3 Geautomatiseerde uitrol via Ansible
 
-6 VM's aangemaakt (101-106) verdeeld over de 3 nodes, elk met een uniek IP (10.24.40.21-26).
+6 VM's aangemaakt (101-106) verdeeld over de 3 nodes, elk met een uniek IP (10.24.40.21-26). Omdat hier maar 3 VM's nodig waren, de overige 3 hergebruikt voor de Docker opdracht.
 
 **Uitrol stappen (DevOps-methodiek: bash → Ansible):**
 
-1. **Bash** `clone_wordpress_vms.sh` — kloont template VM 9000 naar 6 VM's
-2. **Bash** `install_wordpress.sh` — getest op VM 101 (10.24.40.21)
-3. **Ansible** `install_wordpress.yml` — uitgerold op alle 6 VM's
-4. **Ansible** `configure_firewall.yml` — SSH, HTTP en HTTPS toegestaan, UFW ingeschakeld
-5. **Ansible** `create_users.yml` — gebruikers aangemaakt, SSH public keys geplaatst
-6. **Ansible** `install_netdata_wordpress.yml` — Netdata geïnstalleerd op alle VM's
+1. **Bash** `clone_wordpress_vms.sh` - kloont template VM 9000 naar 6 VM's
+2. **Bash** `install_wordpress.sh` - getest op VM 101 (10.24.40.21)
+3. **Ansible** `install_wordpress.yml` - uitgerold op alle 6 VM's
+4. **Ansible** `configure_firewall.yml` - SSH, HTTP en HTTPS toegestaan, UFW ingeschakeld
+5. **Ansible** `create_users.yml` - gebruikers aangemaakt, SSH public keys geplaatst
+6. **Ansible** `install_netdata_wordpress.yml` - Netdata geïnstalleerd op alle VM's
 
 ```bash
 ansible-playbook scripts/ansible/install_wordpress.yml -i scripts/ansible/inventory.ini
