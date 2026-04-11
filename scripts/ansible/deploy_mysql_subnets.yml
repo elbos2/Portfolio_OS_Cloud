@@ -10,15 +10,31 @@
   tasks:
     - name: Zet iptables op legacy modus
       ansible.builtin.shell: |
-        update-alternatives --set iptables /usr/sbin/iptables-legacy
-        update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+        update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
+        update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
       changed_when: false
-      ignore_errors: true
+
+    - name: Verwijder oude Docker netwerken en iptables regels
+      ansible.builtin.shell: |
+        # Kill en verwijder bestaande containers
+        for c in mysql1 mysql2; do
+          pid=$(docker inspect $c --format '{{.State.Pid}}' 2>/dev/null || true)
+          [ -n "$pid" ] && [ "$pid" != "0" ] && kill -9 $pid 2>/dev/null || true
+          docker rm -f $c 2>/dev/null || true
+        done
+        # Verwijder bestaande netwerken
+        docker network rm mysql-subnets_subnet-a mysql-subnets_subnet-b 2>/dev/null || true
+      changed_when: false
 
     - name: Herstart Docker om iptables te herladen
       ansible.builtin.systemd:
         name: docker
         state: restarted
+
+    - name: Wacht tot Docker klaar is
+      ansible.builtin.wait_for:
+        path: /var/run/docker.sock
+        timeout: 30
 
     - name: Doelmap aanmaken
       ansible.builtin.file:
@@ -34,17 +50,10 @@
         owner: ubuntu
         mode: '0644'
 
-    - name: Bestaande containers stoppen en verwijderen
-      ansible.builtin.shell: docker stop mysql1 mysql2 2>/dev/null; docker rm mysql1 mysql2 2>/dev/null; docker compose down 2>/dev/null; true
-      args:
-        chdir: "{{ compose_dest }}"
-      changed_when: false
-
     - name: MySQL containers starten
       ansible.builtin.command: docker compose up -d
       args:
         chdir: "{{ compose_dest }}"
-      register: compose_up
 
     - name: Wachten tot MySQL klaar is
       ansible.builtin.wait_for:
@@ -62,30 +71,25 @@
       ansible.builtin.debug:
         var: network_list.stdout_lines
 
-    - name: Bereikbaarheid mysql1 testen (poort 3306)
+    - name: Bereikbaarheid vanuit host testen
       ansible.builtin.wait_for:
-        port: 3306
+        port: "{{ item.port }}"
         host: 127.0.0.1
         timeout: 10
-      register: mysql1_check
+      register: host_check
       ignore_errors: true
+      loop:
+        - { name: mysql1, port: 3306 }
+        - { name: mysql2, port: 3307 }
 
-    - name: Bereikbaarheid mysql2 testen (poort 3307)
-      ansible.builtin.wait_for:
-        port: 3307
-        host: 127.0.0.1
-        timeout: 10
-      register: mysql2_check
-      ignore_errors: true
-
-    - name: Resultaat bereikbaarheid
+    - name: Resultaat bereikbaarheid vanuit host
       ansible.builtin.debug:
-        msg:
-          - "mysql1 (3306): {{ 'BEREIKBAAR' if mysql1_check is succeeded else 'NIET BEREIKBAAR' }}"
-          - "mysql2 (3307): {{ 'BEREIKBAAR' if mysql2_check is succeeded else 'NIET BEREIKBAAR' }}"
+        msg: "{{ item.item.name }} ({{ item.item.port }}): {{ 'BEREIKBAAR' if item is succeeded else 'NIET BEREIKBAAR' }}"
+      loop: "{{ host_check.results }}"
 
     - name: Connectiviteit tussen containers testen (verwacht niet bereikbaar)
-      ansible.builtin.command: docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
+      ansible.builtin.command: >
+        docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
       register: mysql_result
       ignore_errors: true
       changed_when: false
@@ -100,7 +104,8 @@
       changed_when: true
 
     - name: Connectiviteit opnieuw testen na fix
-      ansible.builtin.command: docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
+      ansible.builtin.command: >
+        docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
       register: mysql_result_after
       ignore_errors: true
       changed_when: false
@@ -108,19 +113,3 @@
     - name: Verbinding resultaat na fix
       ansible.builtin.debug:
         msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if mysql_result_after.rc == 0 else 'NIET BEREIKBAAR' }}"
-
-    - name: Netwerk inspecteren (subnet-a)
-      ansible.builtin.command: docker network inspect mysql-subnets_subnet-a
-      register: subnet_a
-      changed_when: false
-
-    - name: Netwerk inspecteren (subnet-b)
-      ansible.builtin.command: docker network inspect mysql-subnets_subnet-b
-      register: subnet_b
-      changed_when: false
-
-    - name: Subnet overzicht
-      ansible.builtin.debug:
-        msg:
-          - "subnet-a: {{ subnet_a.stdout }}"
-          - "subnet-b: {{ subnet_b.stdout }}"
