@@ -35,29 +35,20 @@
         name: docker
         state: stopped
 
-    - name: Flush nftables
-      ansible.builtin.shell: nft flush ruleset 2>/dev/null || true
-      changed_when: false
-
-    - name: Flush iptables regels
-      ansible.builtin.shell: |
-        /usr/sbin/iptables-legacy -F 2>/dev/null || true
-        /usr/sbin/iptables-legacy -X 2>/dev/null || true
-        /usr/sbin/iptables-legacy -t nat -F 2>/dev/null || true
-        /usr/sbin/iptables-legacy -t nat -X 2>/dev/null || true
-        /usr/sbin/iptables-legacy -P INPUT ACCEPT 2>/dev/null || true
-        /usr/sbin/iptables-legacy -P FORWARD ACCEPT 2>/dev/null || true
-        /usr/sbin/iptables-legacy -P OUTPUT ACCEPT 2>/dev/null || true
-      changed_when: false
-
     - name: Start Docker opnieuw
       ansible.builtin.systemd:
         name: docker
         state: started
 
-    - name: Wacht tot Docker chains zijn aangemaakt
-      ansible.builtin.pause:
-        seconds: 10
+    - name: Wacht tot Docker volledig klaar is
+      ansible.builtin.shell: |
+        for i in $(seq 1 30); do
+          docker info > /dev/null 2>&1 && \
+          iptables -t nat -L DOCKER > /dev/null 2>&1 && \
+          break
+          sleep 1
+        done
+      changed_when: false
 
     - name: Verwijder oude containers en netwerken
       ansible.builtin.shell: |
