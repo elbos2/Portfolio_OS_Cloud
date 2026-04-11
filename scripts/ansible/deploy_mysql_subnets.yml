@@ -50,16 +50,20 @@
         /usr/sbin/iptables-legacy -P OUTPUT ACCEPT 2>/dev/null || true
       changed_when: false
 
+    - name: Start Docker opnieuw
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+
+    - name: Wacht tot Docker chains zijn aangemaakt
+      ansible.builtin.pause:
+        seconds: 10
+
     - name: Verwijder oude containers en netwerken
       ansible.builtin.shell: |
         docker rm -f mysql1 mysql2 2>/dev/null || true
         docker network rm mysql-subnets_subnet-a mysql-subnets_subnet-b 2>/dev/null || true
       changed_when: false
-
-    - name: Start Docker opnieuw
-      ansible.builtin.systemd:
-        name: docker
-        state: started
 
     - name: Wacht tot Docker klaar is
       ansible.builtin.wait_for:
