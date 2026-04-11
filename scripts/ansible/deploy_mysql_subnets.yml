@@ -23,10 +23,9 @@
         mode: '0644'
 
     - name: Bestaande containers stoppen en verwijderen
-      ansible.builtin.command: docker compose down
+      ansible.builtin.shell: docker stop mysql1 mysql2 2>/dev/null; docker rm mysql1 mysql2 2>/dev/null; docker compose down 2>/dev/null; true
       args:
         chdir: "{{ compose_dest }}"
-      ignore_errors: true
       changed_when: false
 
     - name: MySQL containers starten
@@ -74,7 +73,7 @@
           - "mysql2 (3307): {{ 'BEREIKBAAR' if mysql2_check is succeeded else 'NIET BEREIKBAAR' }}"
 
     - name: Connectiviteit tussen containers testen (verwacht niet bereikbaar)
-      ansible.builtin.command: docker exec mysql1 bash -c "echo > /dev/tcp/192.168.101.10/3306"
+      ansible.builtin.command: docker exec mysql1 bash -c "timeout 3 bash -c 'echo > /dev/tcp/192.168.101.10/3306'"
       register: tcp_result
       ignore_errors: true
       changed_when: false
@@ -89,7 +88,7 @@
       changed_when: true
 
     - name: Connectiviteit opnieuw testen na fix
-      ansible.builtin.command: docker exec mysql1 bash -c "echo > /dev/tcp/192.168.101.10/3306"
+      ansible.builtin.command: docker exec mysql1 bash -c "timeout 3 bash -c 'echo > /dev/tcp/192.168.101.10/3306'"
       register: tcp_result_after
       ignore_errors: true
       changed_when: false
