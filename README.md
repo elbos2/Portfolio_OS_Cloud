@@ -1,84 +1,36 @@
-# Portfolio_OS_Cloud
+# Portfolio OS Cloud — cluster-95003
 
-## 1. Proxmox cluster opzetten en monitoren
+Portfolio voor de cursus Cloud Computing (Hanze HBO-ICT, jaar 3).
 
-### Proxmox
-Proxmox cluster (cluster-95003) opgezet met drie nodes: pve-node1 (10.24.40.2), pve-node2 (10.24.40.3) en pve-node3 (10.24.40.4). Ceph is geïnstalleerd als shared storage met HEALTH_OK status en 900GiB beschikbaar via ceph-pool (RBD).
+## Opdrachten
 
-**Infrastructuur opbouw:**
-pve-node1, pve-node2 en pve-node3 zijn geen fysieke machines maar VM's die draaien op een bovenliggende Proxmox omgeving (PVEDT01, PVEDT02, PVEDT03). De Netdata monitoring container (9500304 / 95003-LXC, IP 10.24.40.10) draait op PVEDT01 en valt buiten het cluster-95003. Dit betekent dat deze container niet bereikbaar is via `pct exec` vanuit pve-node1 en apart geconfigureerd moet worden via de Proxmox console van PVEDT01.
+| Opdracht | Omschrijving | Status |
+|----------|-------------|--------|
+| [Opdracht 1](Portfolio_Opdracht1.md) | Beheer en uitrol van Proxmox cluster en webapplicaties | In uitvoering |
+| [Opdracht 2](Portfolio_Opdracht2.md) | Wordt aangevuld | - |
 
-**Toegang per node:**
-- pve-node1: gebruiker `root`, SSH op standaard poort 22
-- pve-node2: root login uitgeschakeld, gebruiker `ellaubo` (wachtwoord: `pannenkoekenmetstroop23$%`), SSH op poort 5995
-- pve-node3: root login uitgeschakeld, gebruiker `ellaubo` (wachtwoord: `pannenkoekenmetstroop23$%`), SSH op poort 5995
+## Infrastructuur
 
-Screenshots: 1_OverviewProxMox, 2_Netwerkinstellingen_Container_9500304, 3_Netwerkinstellingen_Container_9500305, 4_Cluster_Overview, 5a_Ceph_Health, 5b_Ceph_Status, 5c_Ceph_Storage, 6_Repo_Overview
+| Component | IP | Omschrijving |
+|-----------|-----|-------------|
+| pve-node1 | 10.24.40.2 | Proxmox node 1 |
+| pve-node2 | 10.24.40.3 | Proxmox node 2 |
+| pve-node3 | 10.24.40.4 | Proxmox node 3 |
+| netdata-parent | 10.24.40.10 | Netdata monitoring (95003-LXC) |
+| grafana | 10.24.40.11 | Grafana + Prometheus (VM 123) |
+| wordpress-21 t/m 26 | 10.24.40.21-26 | WordPress VM's (Klant 2) |
+| wordpress-lxc-1 t/m 3 | 10.24.40.31-33 | WordPress LXC's (Klant 1) |
 
-### Monitoring
-Netdata wordt gebruikt als monitoring tool voor het Proxmox cluster. Gekozen vanwege eenvoudige installatie, lichtgewicht en overzichtelijk dashboard. De monitoring container (9500304 / 95003-LXC, IP 10.24.40.10) fungeert als parent node en draait op PVEDT01. pve-node1, pve-node2 en pve-node3 streamen als child nodes naar de parent. Installatie geautomatiseerd via Ansible playbook.
+## Automatisering
 
-**Netdata streaming configuratie:**
-Omdat de parent container buiten cluster-95003 valt, is de streaming op de parent handmatig geconfigureerd via de Proxmox console van PVEDT01. De child nodes (pve-nodes, WordPress VM's en LXC's) worden geconfigureerd via het Ansible playbook `configure_netdata_streaming.yml` met API key `c00lc00lc00l-c00l-c00l-c00l-c00lc00lc00l`.
+Alle configuratie is geautomatiseerd via Ansible playbooks in `scripts/ansible/` en bash scripts in `scripts/bash/`.
 
-Screenshots: 7a_Monitoring_Netdata_Installatie, 7b_Monitoring_Netdata_Dashboard, 7c_Monitoring_Netdata_VMs, 7d_Monitoring_Netdata_node1, 7e_Monitoring_Netdata_node2, 7f_Monitoring_Netdata_node3, 7g_Monitoring_Netdata_Dashboard_Nodes
+```bash
+# Ansible uitvoeren vanaf pve-node1
+ansible-playbook scripts/ansible/<playbook>.yml -i scripts/ansible/inventory.ini
+```
 
-### Grafana + Prometheus (uitbreiding monitoring)
-Netdata v2 (de huidige stabiele versie) heeft een beperking in de lokale dashboard: maximaal 5 nodes zichtbaar zonder Netdata Cloud account. Omdat het cluster meer dan 5 nodes heeft (pve-node1/2/3 + 6 WordPress VM's + 3 LXC's), is gekozen voor Grafana als alternatief dashboard zonder node-limieten.
+## Monitoring
 
-**Architectuur:**
-- **Netdata** blijft op alle nodes draaien als metrics collector en streamt naar de parent (95003-LXC, 10.24.40.10)
-- **Prometheus** (op de Grafana VM) scrapt metrics van alle nodes individueel via de Netdata Prometheus endpoint (`/api/v1/allmetrics?format=prometheus`)
-- **Grafana** visualiseert de Prometheus data en maakt het mogelijk om per node te filteren via de Instance dropdown
-
-**Grafana VM:** VM 123 op pve-node1, IP 10.24.40.11, Ubuntu 24.04. Aangemaakt als clone van de ubuntu-2404-cloudinit-template. Installatie geautomatiseerd via Ansible playbook `install_grafana_prometheus.yml`.
-
-**Dashboard:** Netdata community dashboard (ID 7107) geïmporteerd in Grafana. Instance variabele geconfigureerd op `label_values(netdata_system_cpu_percentage_average, instance)` zodat alle nodes selecteerbaar zijn.
-
-Screenshots: 7h_Grafana_Dashboard, 7i_Grafana_Nodes
-
-## 2. Uitrol van applicaties voor klanten volgens DevOps-methodiek
-
-### Cloud-init template
-Ubuntu 24.04 cloud-init template (VM 9000) aangemaakt op ceph-pool als golden image. Template is de basis voor alle WordPress VM's. SSH keys, gebruiker (ubuntu) en netwerkinstellingen zijn vooraf geconfigureerd via cloud-init.
-
-Screenshots: 8a_Cloud_Init_Template, 8b_Cloud_Init_Template, 8c_Cloud_Init_Template, 8e_Cloud_Init_Template, 8f_Cloud_Init_Template, 8g_Cloud_Init_Template
-
-### Handmatig WordPress installeren (voorbereiding)
-Container 9500305 gebruikt om WordPress handmatig te installeren als voorbereiding op het bash script en Ansible playbook. Dit is de DevOps-methodiek: eerst handmatig begrijpen wat je doet, dan automatiseren.
-
-- DB naam: wordpress
-- DB gebruiker: wpuser
-- DB wachtwoord: Welkom01x
-- WordPress pad: /var/www/html/wordpress
-- IP container: 10.24.40.11
-
-Screenshots: 9a_9500305_Wordpress_Apache, 9b_9500305_Wordpress_SQL, 9c_9500305_Wordpress_PHP, 9d_9500305_Wordpress_DB, 9e_9500305_Wordpress, 9f_9500305_Wordpress_Installpage
-
-### Klant 2 - WordPress op VM's met hoge beschikbaarheid
-
-Klant 2 stelt hoge eisen aan beschikbaarheid en beveiliging. Gekozen voor VM's (i.p.v. LXC) vanwege betere isolatie en ondersteuning voor Proxmox HA. In eerste instantie zijn 6 VM's aangemaakt (later bijgesteld naar 3 voor klant 2); de bestaande VM's zijn hergebruikt.
-
-**Uitrol stappen (DevOps-methodiek: bash → Ansible):**
-
-1. **Bash script** `clone_wordpress_vms.sh` kloont template VM 9000 naar 6 VM's (101-106) verdeeld over de 3 nodes, elk met een uniek IP (10.24.40.21-26)
-2. **Bash script** `install_wordpress.sh` getest op VM 101 (10.24.40.21) — WordPress succesvol geïnstalleerd
-3. **Ansible** `install_wordpress.yml` uitgerold op alle 6 VM's — alle nodes changed, geen fouten
-4. **Ansible** `configure_firewall.yml` — SSH, HTTP en HTTPS toegestaan, UFW ingeschakeld op alle VM's
-5. **Ansible** `create_users.yml` — gebruikers aangemaakt, SSH public keys geplaatst
-6. **Ansible** `install_netdata_wordpress.yml` — Netdata geïnstalleerd via kickstart, geconfigureerd op alle VM's, poort 19999 geopend in UFW
-
-Screenshots: 10a_Wordpress_bashclonefile, 10b_Wordpress_nweVMs, 10c_Wordpress_GUIOverview, 10d_Wordpress_TestInstallScript, 10e_Wordpress_TestInstallScript, 10f_Wordpress_AnsiblePing_VM, 10g_Wordpress_AnsibleInstall, 10h_Wordpress_22, 10i_Wordpress_25, 10j_Wordpress_Firewall, 10k_Wordpress_Users, 10l_Wordpress_Netdata, 10m_Wordpress_Netdata
-
-### Klant 1 - WordPress op LXC containers (kostenoptimalisatie)
-
-Klant 1 wil WordPress voor trainingsdoeleinden, focus op lage kosten. Gekozen voor LXC containers omdat deze lichter zijn dan VM's (minder geheugen/CPU overhead) en goedkoper te draaien zijn.
-
-**Noot:** Initieel zijn VM's aangemaakt voor beide klanten. Na heroverweging zijn de VM's toegewezen aan Klant 2 en worden LXC containers ingezet voor Klant 1. Dit is een bewuste keuze op basis van de eisen per klant.
-
-**Uitrol stappen (DevOps-methodiek: bash → Ansible):**
-
-1. **Bash script** `create_lxc_wordpress.sh` maakt CT 201 aan op pve-node1 (Ubuntu 24.04, local-lvm, IP 10.24.40.31), start de container en voert `install_wordpress.sh` uit via `pct exec`
-2. **Ansible** `create_lxc_wordpress.yml` — CT 202 (10.24.40.32) op pve-node2 en CT 203 (10.24.40.33) op pve-node3 aangemaakt en WordPress geïnstalleerd, PLAY RECAP `failed=0` op alle nodes
-
-Screenshots: 11a_LXC_bash, 11b_LXC_created, 11c_LXC_wordpress_installed, 11d_LXC_wordpress_ansible, 11e_LXC_wordpress_ansible_created, 11f_LXC2_wordpress, 11g_LXC3_wordpress
+- **Netdata** — `http://10.24.40.10:19999`
+- **Grafana** — `http://10.24.40.11:3000`
