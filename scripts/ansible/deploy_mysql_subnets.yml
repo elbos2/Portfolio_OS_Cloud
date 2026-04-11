@@ -20,22 +20,34 @@
         update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
       changed_when: false
 
+    - name: Configureer Docker daemon voor iptables
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "iptables": true,
+            "ip-forward": true
+          }
+        mode: '0644'
+
     - name: Stop Docker
       ansible.builtin.systemd:
         name: docker
         state: stopped
 
+    - name: Flush nftables
+      ansible.builtin.shell: nft flush ruleset 2>/dev/null || true
+      changed_when: false
+
     - name: Flush iptables regels
       ansible.builtin.shell: |
-        iptables -F
-        iptables -X
-        iptables -t nat -F
-        iptables -t nat -X
-        iptables -t mangle -F
-        iptables -t mangle -X
-        iptables -P INPUT ACCEPT
-        iptables -P FORWARD ACCEPT
-        iptables -P OUTPUT ACCEPT
+        /usr/sbin/iptables-legacy -F 2>/dev/null || true
+        /usr/sbin/iptables-legacy -X 2>/dev/null || true
+        /usr/sbin/iptables-legacy -t nat -F 2>/dev/null || true
+        /usr/sbin/iptables-legacy -t nat -X 2>/dev/null || true
+        /usr/sbin/iptables-legacy -P INPUT ACCEPT 2>/dev/null || true
+        /usr/sbin/iptables-legacy -P FORWARD ACCEPT 2>/dev/null || true
+        /usr/sbin/iptables-legacy -P OUTPUT ACCEPT 2>/dev/null || true
       changed_when: false
 
     - name: Verwijder oude containers en netwerken
