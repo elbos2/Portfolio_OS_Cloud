@@ -16,13 +16,7 @@
 
     - name: Verwijder oude Docker netwerken en iptables regels
       ansible.builtin.shell: |
-        # Kill en verwijder bestaande containers
-        for c in mysql1 mysql2; do
-          pid=$(docker inspect $c --format '{{.State.Pid}}' 2>/dev/null || true)
-          [ -n "$pid" ] && [ "$pid" != "0" ] && kill -9 $pid 2>/dev/null || true
-          docker rm -f $c 2>/dev/null || true
-        done
-        # Verwijder bestaande netwerken
+        docker rm -f mysql1 mysql2 2>/dev/null || true
         docker network rm mysql-subnets_subnet-a mysql-subnets_subnet-b 2>/dev/null || true
       changed_when: false
 
