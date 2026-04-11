@@ -180,10 +180,10 @@ Dit is nuttig voor:
 
 Twee MySQL containers in aparte subnetten via Docker Compose:
 
-| Container | Subnet        | IP           | Gepubliceerde poort |
-|-----------|---------------|--------------|---------------------|
-| mysql1    | 172.20.0.0/24 | 172.20.0.10  | 3306                |
-| mysql2    | 172.21.0.0/24 | 172.21.0.10  | 3307                |
+| Container | Subnet          | IP              | Gepubliceerde poort |
+|-----------|-----------------|-----------------|---------------------|
+| mysql1    | 192.168.100.0/24 | 192.168.100.10 | 3306                |
+| mysql2    | 192.168.101.0/24 | 192.168.101.10 | 3307                |
 
 Gebruikte bestanden:
 - `scripts/docker/mysql-subnets/docker-compose.yml`
