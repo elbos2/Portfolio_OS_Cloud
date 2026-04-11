@@ -20,13 +20,12 @@
         update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
       changed_when: false
 
-    - name: Configureer Docker daemon voor iptables
+    - name: Configureer Docker daemon - zet iptables uit
       ansible.builtin.copy:
         dest: /etc/docker/daemon.json
         content: |
           {
-            "iptables": true,
-            "ip-forward": true
+            "iptables": false
           }
         mode: '0644'
 
