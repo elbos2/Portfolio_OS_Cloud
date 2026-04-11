@@ -126,13 +126,64 @@ Playbook resultaat:
 
 ---
 
-## 7. Basic Docker Networking
+## 7. MySQL Containers in aparte subnetten
 
-### Status
+### Doel
 
-Basisnetwerkcontrole is uitgevoerd tijdens:
-- containerbereikbaarheid via localhost en gepubliceerde poorten;
-- compose stack netwerk (default compose network);
-- swarm node connectiviteit.
+Twee MySQL containers opstarten in aparte Docker-subnetten, de bereikbaarheid testen vanuit het Proxmox-subnet en tussen de containers onderling, en eventueel de connectiviteit herstellen.
 
-Aanvullend subnet/MySQL-netwerkdeel wordt toegevoegd in de vervolgstap van de opdracht.
+### Docker subnetten uitgelegd
+
+Docker maakt standaard één bridge-netwerk aan waarop alle containers met elkaar kunnen communiceren. Door containers in **aparte subnetten** te plaatsen, isoleer je ze van elkaar — ze kunnen dan niet meer zomaar onderling communiceren.
+
+Dit is nuttig voor:
+- **Beveiliging**: een database-container is niet bereikbaar vanuit een frontend-container tenzij je dat expliciet toestaat
+- **Multi-tenant omgevingen**: meerdere klanten of applicaties delen dezelfde host maar zijn netwerktechnisch gescheiden
+- **Microservices**: elke service heeft zijn eigen netwerksegment, waardoor blast radius bij een incident beperkt blijft
+
+### Opzet
+
+Twee MySQL containers in aparte subnetten via Docker Compose:
+
+| Container | Subnet       | IP           | Gepubliceerde poort |
+|-----------|-------------|--------------|---------------------|
+| mysql1    | 172.20.0.0/24 | 172.20.0.10 | 3306                |
+| mysql2    | 172.21.0.0/24 | 172.21.0.10 | 3307                |
+
+Gebruikte bestanden:
+- `scripts/docker/mysql-subnets/docker-compose.yml`
+- `scripts/bash/test_mysql_subnets.sh`
+
+### Uitvoering
+
+1. Containers gestart met `docker compose up -d`
+2. Bereikbaarheid vanuit host getest via `nc` op poorten 3306 en 3307 → **bereikbaar** via gepubliceerde poorten
+3. Connectiviteit tussen containers getest → **niet bereikbaar** (aparte subnetten)
+4. Fix toegepast: mysql1 toegevoegd aan subnet-b via `docker network connect`
+5. Opnieuw getest → **bereikbaar**
+
+### Bewijs
+
+*Screenshots toevoegen na uitvoering.*
+
+---
+
+## 8. Basic Docker Networking
+
+### Doel
+
+De basis Docker-netwerkcommando's uitvoeren via een script dat de commando's één voor één doorloopt.
+
+### Uitvoering
+
+- Script aangemaakt: `scripts/bash/docker_networking.sh`
+- Bridge-netwerk aangemaakt en geïnspecteerd.
+- Twee containers gestart op hetzelfde netwerk.
+- Verbinding tussen containers getest met ping.
+- Netwerk en containers opgeruimd.
+
+### Bewijs
+
+![Networking script uitvoer deel 1](docs/screenshots/14m_Opdracht2_RunNetworkingCommands.png)
+
+![Networking script uitvoer deel 2](docs/screenshots/14n_Opdracht2_RunNetworkingCommands.png)
