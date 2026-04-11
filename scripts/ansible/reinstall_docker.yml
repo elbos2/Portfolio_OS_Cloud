@@ -69,6 +69,12 @@
         > /etc/apt/sources.list.d/docker.list
       changed_when: false
 
+    - name: Herstel dpkg indien kapot
+      ansible.builtin.shell: |
+        dpkg --configure -a
+        apt-get install -f -y
+      changed_when: false
+
     - name: Installeer Docker
       ansible.builtin.apt:
         name:
