@@ -1,6 +1,6 @@
 ---
 - name: Deploy MySQL containers in aparte subnetten
-  hosts: mgr1
+  hosts: docker_managers
   become: true
   gather_facts: false
 
@@ -8,22 +8,46 @@
     compose_dest: /home/ubuntu/mysql-subnets
 
   tasks:
+    - name: Installeer iptables package
+      ansible.builtin.apt:
+        name: iptables
+        state: present
+        update_cache: false
+
     - name: Zet iptables op legacy modus
       ansible.builtin.shell: |
-        update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
-        update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
+        update-alternatives --set iptables /usr/sbin/iptables-legacy
+        update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
       changed_when: false
 
-    - name: Verwijder oude Docker netwerken en iptables regels
+    - name: Stop Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: stopped
+
+    - name: Flush iptables regels
+      ansible.builtin.shell: |
+        iptables -F
+        iptables -X
+        iptables -t nat -F
+        iptables -t nat -X
+        iptables -t mangle -F
+        iptables -t mangle -X
+        iptables -P INPUT ACCEPT
+        iptables -P FORWARD ACCEPT
+        iptables -P OUTPUT ACCEPT
+      changed_when: false
+
+    - name: Verwijder oude containers en netwerken
       ansible.builtin.shell: |
         docker rm -f mysql1 mysql2 2>/dev/null || true
         docker network rm mysql-subnets_subnet-a mysql-subnets_subnet-b 2>/dev/null || true
       changed_when: false
 
-    - name: Herstart Docker om iptables te herladen
+    - name: Start Docker opnieuw
       ansible.builtin.systemd:
         name: docker
-        state: restarted
+        state: started
 
     - name: Wacht tot Docker klaar is
       ansible.builtin.wait_for:
