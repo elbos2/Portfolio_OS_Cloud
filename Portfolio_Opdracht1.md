@@ -56,7 +56,7 @@ Ceph geïnstalleerd als shared storage met HEALTH_OK status en 900GiB beschikbaa
 Netdata wordt ingezet als metrics collector op alle nodes. De monitoring container (95003-LXC, IP 10.24.40.10) fungeert als parent node. pve-node1/2/3, de WordPress VM's en LXC's streamen als child nodes naar de parent via het Netdata streaming protocol.
 
 **Reden voor Grafana toevoeging:**
-Netdata v2 (de huidige stabiele versie) heeft een beperking in de lokale dashboard van maximaal 5 nodes zonder Netdata Cloud account. Omdat het cluster meer dan 5 nodes heeft, is Grafana toegevoegd als dashboard zonder node-limieten.
+Netdata v2 (de huidige stabiele versie) heeft een beperking in de lokale dashboard van maximaal 5 nodes zonder Netdata Cloud account. Omdat het cluster meer dan 5 nodes heeft, is Grafana toegevoegd als dashboard zonder node-limieten. Uiteindelijk de Grafana configuratie niet af kunnen maken ivm de tijd. 
 
 **Installatie:**
 ```bash
