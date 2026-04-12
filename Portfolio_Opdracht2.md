@@ -255,4 +255,10 @@ docker exec mysql2 mysqladmin -h mysql1 -u root -psecret --connect-timeout=5 pin
 
 ### Bewijs
 
-*Screenshots toevoegen na uitvoering.*
+**Ansible playbook — connectiviteit na fix nog niet bereikbaar (voor sysctl fix):**
+
+![Ansible playbook failed connectivity](docs/screenshots/14o_Opdracht2_FailedSQLSubnet.png)
+
+**Handmatige uitvoering — succesvolle connectiviteitstest voor en na fix:**
+
+![Handmatige succesvolle test](docs/screenshots/14p_Opdracht2_SQLSubnetManuallySuccess.png)
