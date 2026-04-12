@@ -14,6 +14,10 @@
 ### Opdracht 2 - MySQL containers in aparte subnetten
 8. [MySQL containers in aparte subnetten](#8-mysql-containers-in-aparte-subnetten)
 
+### Opdracht 3 - Load Balancing en Reverse Proxy
+9. [Traefik - Kennismaking reverse proxy](#9-traefik---kennismaking-reverse-proxy)
+10. [Nginx - Load balancer in Docker](#10-nginx---load-balancer-in-docker)
+
 ---
 
 ## Opdracht 1 - Docker basis en Swarm
@@ -262,3 +266,165 @@ docker exec mysql2 mysqladmin -h mysql1 -u root -psecret --connect-timeout=5 pin
 **Handmatige uitvoering — succesvolle connectiviteitstest voor en na fix:**
 
 ![Handmatige succesvolle test](docs/screenshots/14p_Opdracht2_SQLSubnetManuallySuccess.png)
+
+---
+
+## Opdracht 3 - Load Balancing en Reverse Proxy
+
+---
+
+## 9. Traefik - Kennismaking reverse proxy
+
+### Wat is een Reverse Proxy?
+
+Een **reverse proxy** zit tussen de client en de achterliggende servers. De client communiceert alleen met de proxy — die bepaalt vervolgens naar welke backend server het verzoek doorgestuurd wordt.
+
+Voordelen:
+- **Abstractie**: clients hoeven de interne serverstructuur niet te kennen
+- **Load balancing**: verzoeken verdelen over meerdere servers
+- **TLS-terminatie**: HTTPS afhandelen op één plek, backends draaien op plain HTTP
+- **Routing**: op basis van hostname of pad doorsturen naar de juiste service
+- **Beveiliging**: backends zijn niet direct bereikbaar vanaf het internet
+
+### Traefik
+
+Traefik is een moderne reverse proxy die speciaal ontworpen is voor containeromgevingen. Het detecteert automatisch welke containers er draaien via Docker labels en past de routering dynamisch aan — zonder herstart.
+
+### Opzet (officiële Quick Start)
+
+Bron: [https://doc.traefik.io/traefik/getting-started/quick-start/](https://doc.traefik.io/traefik/getting-started/quick-start/)
+
+Bestand: `scripts/docker/traefik/docker-compose.yml`
+
+```yaml
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  whoami:
+    image: traefik/whoami
+    labels:
+      - "traefik.http.routers.whoami.rule=Host(`whoami.localhost`)"
+```
+
+### Uitvoering
+
+```bash
+cd scripts/docker/traefik
+docker compose up -d
+
+# Test via curl
+curl -H "Host: whoami.localhost" http://localhost
+
+# Traefik dashboard
+# Ga naar http://<host-ip>:8080/dashboard/
+```
+
+### Bewijs
+
+*Screenshots toevoegen na uitvoering.*
+
+---
+
+## 10. Nginx - Load balancer in Docker
+
+### Doel
+
+Een load balancer opzetten met Nginx in Docker waarbij meerdere instanties van een applicatie verdeeld worden via round-robin. Aangetoond wordt hoe requests over verschillende containers worden verdeeld.
+
+### Gevolgde tutorial
+
+[How to Configure Nginx as a Reverse Proxy for Docker Containers — linuxiac.com](https://linuxiac.com/nginx-reverse-proxy/)
+
+### Wat is load balancing?
+
+Bij load balancing verdeelt een proxy inkomende verzoeken over meerdere backend-instances. Dit zorgt voor:
+- **Schaalbaarheid**: meer verkeer aankunnen door extra containers te starten
+- **Beschikbaarheid**: als één container uitvalt, nemen andere het over
+- **Betere responstijden**: verzoeken gaan naar de minst belaste server
+
+Nginx verdeelt standaard via **round-robin**: elk volgend verzoek gaat naar de volgende server in de lijst.
+
+### Opzet
+
+Bestanden: `scripts/docker/nginx-lb/`
+
+**docker-compose.yml:**
+
+```yaml
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+
+  app:
+    image: traefik/whoami
+```
+
+**nginx.conf:**
+
+```nginx
+events {
+    worker_connections 1024;
+}
+
+http {
+    resolver 127.0.0.11 valid=10s;
+
+    upstream app_backend {
+        server app:80;
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass         http://app_backend;
+            proxy_set_header   Host $host;
+            proxy_set_header   X-Real-IP $remote_addr;
+            proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+}
+```
+
+`traefik/whoami` is een minimale webserver die zijn eigen hostname en IP teruggeeft. Zo is direct zichtbaar welke container een request afhandelt.
+
+### Uitvoering
+
+```bash
+cd scripts/docker/nginx-lb
+
+# 1. Start de stack
+docker compose up -d
+
+# 2. Test de reverse proxy (één instantie)
+curl http://localhost:8081
+
+# 3. Schaal op naar 3 instanties
+docker compose up -d --scale app=3
+
+# 4. Stuur 6 requests — hostname wisselt per request (round-robin)
+for i in {1..6}; do curl -s http://localhost:8081 | grep Hostname; done
+
+# 5. Opruimen
+docker compose down
+```
+
+### Bewijs
+
+*Screenshots en screen recording toevoegen na uitvoering.*
