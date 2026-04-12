@@ -113,13 +113,27 @@
       ansible.builtin.pause:
         seconds: 5
 
-    - name: Zet bridge-nf-call-iptables uit (bridged traffic bypass iptables)
-      ansible.builtin.sysctl:
-        name: net.bridge.bridge-nf-call-iptables
-        value: '0'
-        state: present
-        sysctl_set: true
-        reload: true
+    - name: Zet bridge-nf-call-iptables uit via shell
+      ansible.builtin.shell: echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
+      changed_when: true
+
+    - name: Verifieer bridge-nf-call-iptables waarde
+      ansible.builtin.shell: cat /proc/sys/net/bridge/bridge-nf-call-iptables
+      register: bpf_value
+      changed_when: false
+
+    - name: Toon bridge-nf-call-iptables
+      ansible.builtin.debug:
+        msg: "bridge-nf-call-iptables = {{ bpf_value.stdout }} (verwacht: 0)"
+
+    - name: Toon actieve bridge interfaces
+      ansible.builtin.shell: ip link show type bridge
+      register: bridges
+      changed_when: false
+
+    - name: Bridge interfaces debug
+      ansible.builtin.debug:
+        var: bridges.stdout_lines
 
     # ---- Connectiviteitstest NA fix -------------------------------------
     - name: Test mysql1 -> mysql2 NA fix
