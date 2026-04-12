@@ -7,6 +7,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: db1
+    command: --innodb-buffer-pool-size=128M
+    mem_limit: 400m
     networks:
       subnet-a:
         ipv4_address: 192.168.100.10
@@ -21,6 +23,11 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: db2
+    command: --innodb-buffer-pool-size=128M
+    mem_limit: 400m
+    depends_on:
+      mysql1:
+        condition: service_started
     networks:
       subnet-b:
         ipv4_address: 192.168.101.10
