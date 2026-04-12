@@ -13,11 +13,8 @@
       ansible.builtin.shell: docker rm -f $(docker ps -aq) 2>/dev/null || true
       changed_when: false
 
-    - name: Verwijder alle Docker netwerken (behalve standaard)
-      ansible.builtin.shell: |
-        docker network ls --format '{{.ID}}' | while read id; do
-          docker network rm $id 2>/dev/null || true
-        done
+    - name: Verwijder alle ongebruikte Docker netwerken
+      ansible.builtin.shell: docker network prune -f 2>/dev/null || true
       changed_when: false
 
     - name: Stop Docker
