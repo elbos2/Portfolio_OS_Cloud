@@ -187,7 +187,7 @@ Twee MySQL containers in aparte subnetten via Docker Compose, beide op **docker-
 
 Gebruikte bestanden:
 - `scripts/docker/mysql-subnets/docker-compose.yml`
-- `scripts/ansible/deploy_mysql_subnets.yml`
+- `scripts/ansible/reset_and_deploy_mysql.yml`
 
 ### Waarom één VM en niet drie?
 
@@ -197,23 +197,61 @@ Initieel is geprobeerd het playbook op alle drie Docker-managers (mgr1, mgr2, mg
 
 2. **Complexe iptables-conflicten** — het playbook stopte Docker, manipuleerde iptables-chains handmatig en herstartte Docker. Dit veroorzaakte conflicten met de bestaande iptables-regels op de VM's en brak op een gegeven moment de SSH-verbinding naar de hosts.
 
-De correcte aanpak voor Docker subnet-isolatie is: **beide containers op dezelfde host**, elk in een eigen Docker bridge network. De isolatie zit in de Docker lagen, niet in de VM-laag. Door alleen mgr1 te gebruiken is het playbook ook een stuk eenvoudiger en veiliger geworden.
+De correcte aanpak voor Docker subnet-isolatie is: **beide containers op dezelfde host**, elk in een eigen Docker bridge network. De isolatie zit in de Docker lagen, niet in de VM-laag.
+
+### Technische uitdagingen tijdens het opzetten
+
+Het werkend krijgen van de container-naar-container communicatie heeft aanzienlijk meer tijd gekost dan verwacht, door een combinatie van problemen die specifiek zijn voor Ubuntu 22.04 met Docker:
+
+**1. Onvoldoende VM-geheugen**
+De VM had initieel 1024 MB RAM. Het gelijktijdig initialiseren van twee MySQL 8.0 containers (elk ~400 MB tijdens opstarten) zorgde dat de VM volledig vastliep en SSH-verbindingen verbraken. Opgelost door de VM te upgraden naar 2048 MB en geheugenlimieten toe te voegen aan de docker-compose (`mem_limit: 400m`, `--innodb-buffer-pool-size=128M`).
+
+**2. Ophoping van stale Docker bridge interfaces**
+Na herhaalde `docker compose down/up` cycli bleven oude bridge interfaces achter met dezelfde IP-adressen (192.168.100.1 en 192.168.101.1) maar in `DOWN` staat. De host stuurde ARP-requests op de neergehaalde bridge in plaats van de actieve, waardoor containers onbereikbaar werden — ook voor ping. Opgelost door stale bridges handmatig te verwijderen met `ip link delete`.
+
+**3. bridge-nf-call-iptables blokkeerde intra-bridge verkeer**
+Na het verwijderen van de stale bridges waren containers wel pingbaar, maar TCP-verbindingen tussen containers bleven time-outen (error 110). De oorzaak: `net.bridge.bridge-nf-call-iptables=1` stuurde gebridged container-verkeer door de iptables FORWARD-chain, die standaard `policy DROP` heeft. Docker's ACCEPT-regels in de DOCKER-FORWARD chain werden niet correct toegepast voor intra-bridge verkeer. Opgelost door de sysctl op 0 te zetten:
+
+```bash
+sudo sh -c 'echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables'
+```
+
+Dit vertelt de kernel dat gebridged L2-verkeer iptables omzeilt. Docker's netwerkseparatie tussen *verschillende* subnetten blijft intact via routing-niveau isolatie.
 
 ### Uitvoering
 
-De setup is geautomatiseerd via Ansible en uitgerold op docker-mgr-1:
+De uiteindelijke werkende stappen op docker-mgr-1:
 
 ```bash
-ansible-playbook -i inventory.ini deploy_mysql_subnets.yml
+# 1. Clean start
+cd ~/mysql-subnets
+docker compose down
+docker compose up -d
+
+# 2. Test VOOR fix — containers zitten in aparte subnetten
+docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
+# → Can't connect (aparte subnetten, geen route)
+
+# 3. Fix toepassen
+docker network connect mysql-subnets_subnet-b mysql1
+sudo sh -c 'echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables'
+
+# 4. Test NA fix
+docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=5 ping
+# → mysqld is alive
+docker exec mysql2 mysqladmin -h mysql1 -u root -psecret --connect-timeout=5 ping
+# → mysqld is alive
 ```
 
-1. Oude containers en netwerken opgeruimd
-2. Docker Compose bestand gekopieerd naar de host
-3. Containers gestart met `docker compose up -d`
-4. Bereikbaarheid vanuit host getest op poorten 3306 en 3307 → **bereikbaar**
-5. Connectiviteit tussen containers getest → **niet bereikbaar** (aparte Docker subnetten)
-6. Fix toegepast: mysql1 toegevoegd aan subnet-b via `docker network connect`
-7. Opnieuw getest → **bereikbaar**
+**Resultaten:**
+
+| Test | Resultaat |
+|------|-----------|
+| mysql1 vanuit host (poort 3306) | bereikbaar |
+| mysql2 vanuit host (poort 3307) | bereikbaar |
+| mysql1 → mysql2 vóór fix | niet bereikbaar (aparte subnetten) |
+| mysql1 → mysql2 na fix | **mysqld is alive** |
+| mysql2 → mysql1 na fix | **mysqld is alive** |
 
 ### Bewijs
 
