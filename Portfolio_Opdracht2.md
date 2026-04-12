@@ -178,10 +178,10 @@ Dit is nuttig voor:
 
 ### Opzet
 
-Twee MySQL containers in aparte subnetten via Docker Compose:
+Twee MySQL containers in aparte subnetten via Docker Compose, beide op **docker-mgr-1 (10.24.40.22)**:
 
-| Container | Subnet          | IP              | Gepubliceerde poort |
-|-----------|-----------------|-----------------|---------------------|
+| Container | Subnet           | IP             | Gepubliceerde poort |
+|-----------|------------------|----------------|---------------------|
 | mysql1    | 192.168.100.0/24 | 192.168.100.10 | 3306                |
 | mysql2    | 192.168.101.0/24 | 192.168.101.10 | 3307                |
 
@@ -189,20 +189,31 @@ Gebruikte bestanden:
 - `scripts/docker/mysql-subnets/docker-compose.yml`
 - `scripts/ansible/deploy_mysql_subnets.yml`
 
+### Waarom één VM en niet drie?
+
+Initieel is geprobeerd het playbook op alle drie Docker-managers (mgr1, mgr2, mgr3) uit te rollen. Dit leverde twee problemen op:
+
+1. **Geen zinvolle netwerkseparatie** — als elke VM zijn eigen mysql1 en mysql2 krijgt, test je de isolatie drie keer op zichzelf. Containers op verschillende VM's communiceren sowieso via het host-netwerk (10.24.40.x), dus Docker bridge isolation is dan irrelevant.
+
+2. **Complexe iptables-conflicten** — het playbook stopte Docker, manipuleerde iptables-chains handmatig en herstartte Docker. Dit veroorzaakte conflicten met de bestaande iptables-regels op de VM's en brak op een gegeven moment de SSH-verbinding naar de hosts.
+
+De correcte aanpak voor Docker subnet-isolatie is: **beide containers op dezelfde host**, elk in een eigen Docker bridge network. De isolatie zit in de Docker lagen, niet in de VM-laag. Door alleen mgr1 te gebruiken is het playbook ook een stuk eenvoudiger en veiliger geworden.
+
 ### Uitvoering
 
-De setup is geautomatiseerd via Ansible en uitgerold op alle drie Docker-hosts:
+De setup is geautomatiseerd via Ansible en uitgerold op docker-mgr-1:
 
 ```bash
 ansible-playbook -i inventory.ini deploy_mysql_subnets.yml
 ```
 
-1. Docker Compose bestand gekopieerd naar elke host
-2. Containers gestart met `docker compose up -d`
-3. Bereikbaarheid vanuit host getest op poorten 3306 en 3307 → **bereikbaar**
-4. Connectiviteit tussen containers getest → **niet bereikbaar** (aparte subnetten)
-5. Fix toegepast: mysql1 toegevoegd aan subnet-b via `docker network connect`
-6. Opnieuw getest → **bereikbaar**
+1. Oude containers en netwerken opgeruimd
+2. Docker Compose bestand gekopieerd naar de host
+3. Containers gestart met `docker compose up -d`
+4. Bereikbaarheid vanuit host getest op poorten 3306 en 3307 → **bereikbaar**
+5. Connectiviteit tussen containers getest → **niet bereikbaar** (aparte Docker subnetten)
+6. Fix toegepast: mysql1 toegevoegd aan subnet-b via `docker network connect`
+7. Opnieuw getest → **bereikbaar**
 
 ### Bewijs
 

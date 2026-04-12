@@ -1,6 +1,6 @@
 ---
 - name: Deploy MySQL containers in aparte subnetten
-  hosts: docker_managers
+  hosts: mgr1
   become: true
   gather_facts: false
 
@@ -8,61 +8,18 @@
     compose_dest: /home/ubuntu/mysql-subnets
 
   tasks:
-    - name: Installeer iptables package
-      ansible.builtin.apt:
-        name: iptables
-        state: present
-        update_cache: false
-
-    - name: Zet iptables op legacy modus
-      ansible.builtin.shell: |
-        update-alternatives --set iptables /usr/sbin/iptables-legacy
-        update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
-      changed_when: false
-
-    - name: Verwijder daemon.json indien aanwezig
-      ansible.builtin.file:
-        path: /etc/docker/daemon.json
-        state: absent
-
-    - name: Stop Docker
-      ansible.builtin.systemd:
-        name: docker
-        state: stopped
-
-    - name: Maak Docker iptables chains handmatig aan
-      ansible.builtin.shell: |
-        /usr/sbin/iptables-legacy -t nat -N DOCKER 2>/dev/null || true
-        /usr/sbin/iptables-legacy -t filter -N DOCKER 2>/dev/null || true
-        /usr/sbin/iptables-legacy -t filter -N DOCKER-ISOLATION-STAGE-1 2>/dev/null || true
-        /usr/sbin/iptables-legacy -t filter -N DOCKER-ISOLATION-STAGE-2 2>/dev/null || true
-        /usr/sbin/iptables-legacy -t filter -N DOCKER-USER 2>/dev/null || true
-      changed_when: false
-
-    - name: Start Docker opnieuw
-      ansible.builtin.systemd:
-        name: docker
-        state: started
-
-    - name: Wacht tot Docker volledig klaar is
-      ansible.builtin.shell: |
-        for i in $(seq 1 30); do
-          docker info > /dev/null 2>&1 && break
-          sleep 1
-        done
-      changed_when: false
-
-    - name: Verwijder oude containers en netwerken
+    # ---- Opruimen --------------------------------------------------------
+    - name: Verwijder oude containers
       ansible.builtin.shell: |
         docker rm -f mysql1 mysql2 2>/dev/null || true
+      changed_when: false
+
+    - name: Verwijder oude netwerken
+      ansible.builtin.shell: |
         docker network rm mysql-subnets_subnet-a mysql-subnets_subnet-b 2>/dev/null || true
       changed_when: false
 
-    - name: Wacht tot Docker klaar is
-      ansible.builtin.wait_for:
-        path: /var/run/docker.sock
-        timeout: 30
-
+    # ---- Deploy ----------------------------------------------------------
     - name: Doelmap aanmaken
       ansible.builtin.file:
         path: "{{ compose_dest }}"
@@ -82,14 +39,22 @@
       args:
         chdir: "{{ compose_dest }}"
 
-    - name: Wachten tot MySQL klaar is
+    - name: Wachten tot MySQL1 klaar is (poort 3306)
       ansible.builtin.wait_for:
         port: 3306
         host: 127.0.0.1
         delay: 10
         timeout: 60
 
-    - name: Netwerken tonen
+    - name: Wachten tot MySQL2 klaar is (poort 3307)
+      ansible.builtin.wait_for:
+        port: 3307
+        host: 127.0.0.1
+        delay: 5
+        timeout: 60
+
+    # ---- Netwerken tonen ------------------------------------------------
+    - name: Docker netwerken tonen
       ansible.builtin.command: docker network ls
       register: network_list
       changed_when: false
@@ -98,50 +63,87 @@
       ansible.builtin.debug:
         var: network_list.stdout_lines
 
-    - name: Bereikbaarheid vanuit host testen
+    # ---- Test bereikbaarheid vanuit host --------------------------------
+    - name: Test bereikbaarheid vanuit host - mysql1 (3306)
       ansible.builtin.wait_for:
-        port: "{{ item.port }}"
+        port: 3306
         host: 127.0.0.1
         timeout: 10
-      register: host_check
+      register: host_check_mysql1
       ignore_errors: true
-      loop:
-        - { name: mysql1, port: 3306 }
-        - { name: mysql2, port: 3307 }
+
+    - name: Test bereikbaarheid vanuit host - mysql2 (3307)
+      ansible.builtin.wait_for:
+        port: 3307
+        host: 127.0.0.1
+        timeout: 10
+      register: host_check_mysql2
+      ignore_errors: true
 
     - name: Resultaat bereikbaarheid vanuit host
       ansible.builtin.debug:
-        msg: "{{ item.item.name }} ({{ item.item.port }}): {{ 'BEREIKBAAR' if item is succeeded else 'NIET BEREIKBAAR' }}"
-      loop: "{{ host_check.results }}"
+        msg:
+          - "mysql1 (poort 3306): {{ 'BEREIKBAAR' if host_check_mysql1 is succeeded else 'NIET BEREIKBAAR' }}"
+          - "mysql2 (poort 3307): {{ 'BEREIKBAAR' if host_check_mysql2 is succeeded else 'NIET BEREIKBAAR' }}"
 
-    - name: Connectiviteit tussen containers testen (verwacht niet bereikbaar)
-      ansible.builtin.command: >
-        docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret --connect-timeout=3 ping
-      register: mysql_result
-      ignore_errors: true
+    # ---- Test connectiviteit VOOR fix -----------------------------------
+    - name: Test connectiviteit mysql1 -> mysql2 VOOR fix (bash TCP)
+      ansible.builtin.shell: |
+        docker exec mysql1 bash -c \
+          'timeout 3 bash -c "echo > /dev/tcp/192.168.101.10/3306" 2>/dev/null \
+          && echo "BEREIKBAAR" || echo "NIET BEREIKBAAR (aparte subnetten)"'
+      register: result_before_fix
       changed_when: false
+      ignore_errors: true
 
-    - name: Verbinding resultaat voor fix
+    - name: Connectiviteit VOOR fix
       ansible.builtin.debug:
-        msg: "mysql1 -> mysql2: {{ 'BEREIKBAAR' if mysql_result.rc == 0 else 'NIET BEREIKBAAR (aparte subnetten)' }}"
+        msg: "mysql1 -> mysql2: {{ result_before_fix.stdout }}"
 
-    - name: Fix toepassen - mysql1 toevoegen aan subnet-b
+    # ---- Fix: verbind mysql1 met subnet-b --------------------------------
+    - name: Fix - voeg mysql1 toe aan subnet-b
       ansible.builtin.command: docker network connect mysql-subnets_subnet-b mysql1
       ignore_errors: true
       changed_when: true
 
     - name: Wacht tot netwerk actief is
       ansible.builtin.pause:
-        seconds: 5
+        seconds: 3
 
-    - name: Connectiviteit opnieuw testen na fix (TCP)
-      ansible.builtin.command: >
-        docker exec mysql1 python3 -c
-        "import socket,sys; s=socket.socket(); s.settimeout(5); r=s.connect_ex(('192.168.101.10',3306)); s.close(); print('BEREIKBAAR' if r==0 else 'NIET BEREIKBAAR (code '+str(r)+')'); sys.exit(r)"
-      register: mysql_result_after
-      ignore_errors: true
+    # ---- Test connectiviteit NA fix -------------------------------------
+    - name: Test connectiviteit mysql1 -> mysql2 NA fix (bash TCP)
+      ansible.builtin.shell: |
+        docker exec mysql1 bash -c \
+          'timeout 3 bash -c "echo > /dev/tcp/192.168.101.10/3306" 2>/dev/null \
+          && echo "BEREIKBAAR" || echo "NIET BEREIKBAAR"'
+      register: result_after_fix
       changed_when: false
+      ignore_errors: true
 
-    - name: Verbinding resultaat na fix
+    - name: Connectiviteit NA fix
       ansible.builtin.debug:
-        msg: "mysql1 -> mysql2: {{ mysql_result_after.stdout }}"
+        msg: "mysql1 -> mysql2: {{ result_after_fix.stdout }}"
+
+    - name: Test connectiviteit mysql2 -> mysql1 NA fix (bash TCP)
+      ansible.builtin.shell: |
+        docker exec mysql2 bash -c \
+          'timeout 3 bash -c "echo > /dev/tcp/192.168.100.10/3306" 2>/dev/null \
+          && echo "BEREIKBAAR" || echo "NIET BEREIKBAAR"'
+      register: result_mysql2_to_mysql1
+      changed_when: false
+      ignore_errors: true
+
+    - name: Connectiviteit mysql2 -> mysql1 NA fix
+      ansible.builtin.debug:
+        msg: "mysql2 -> mysql1: {{ result_mysql2_to_mysql1.stdout }}"
+
+    # ---- Samenvatting ---------------------------------------------------
+    - name: Samenvatting
+      ansible.builtin.debug:
+        msg:
+          - "=== SAMENVATTING ==="
+          - "mysql1 vanuit host (3306):   {{ 'OK' if host_check_mysql1 is succeeded else 'FAIL' }}"
+          - "mysql2 vanuit host (3307):   {{ 'OK' if host_check_mysql2 is succeeded else 'FAIL' }}"
+          - "mysql1->mysql2 voor fix:     {{ result_before_fix.stdout }}"
+          - "mysql1->mysql2 na fix:       {{ result_after_fix.stdout }}"
+          - "mysql2->mysql1 na fix:       {{ result_mysql2_to_mysql1.stdout }}"
