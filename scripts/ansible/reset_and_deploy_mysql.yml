@@ -52,14 +52,6 @@
         exit 1
       changed_when: false
 
-    - name: Zet bridge-nf-call-iptables uit (bridged traffic bypass iptables)
-      ansible.builtin.sysctl:
-        name: net.bridge.bridge-nf-call-iptables
-        value: '0'
-        state: present
-        sysctl_set: true
-        reload: true
-
     # ---- Deploy MySQL containers -----------------------------------------
     - name: Doelmap aanmaken
       ansible.builtin.file:
@@ -120,6 +112,14 @@
     - name: Wacht tot netwerk actief is
       ansible.builtin.pause:
         seconds: 5
+
+    - name: Zet bridge-nf-call-iptables uit (bridged traffic bypass iptables)
+      ansible.builtin.sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: '0'
+        state: present
+        sysctl_set: true
+        reload: true
 
     # ---- Connectiviteitstest NA fix -------------------------------------
     - name: Test mysql1 -> mysql2 NA fix
