@@ -331,7 +331,13 @@ curl -H "Host: whoami.localhost" http://localhost
 
 ### Bewijs
 
-*Screenshots toevoegen na uitvoering.*
+**Docker Compose up en curl test:**
+
+![Traefik compose up en curl](docs/screenshots/14q_Opdracht2_Traefik.png)
+
+**Traefik dashboard via curl (poort 8080 niet bereikbaar vanuit browser):**
+
+![Traefik dashboard curl](docs/screenshots/14r_Opdracht2_TraefikcurlDashboard.png)
 
 ---
 
@@ -343,7 +349,7 @@ Een load balancer opzetten met Nginx in Docker waarbij meerdere instanties van e
 
 ### Gevolgde tutorial
 
-[How to Configure Nginx as a Reverse Proxy for Docker Containers — linuxiac.com](https://linuxiac.com/nginx-reverse-proxy/)
+[Load Balancing a FastAPI App with Nginx and Docker — rickt.io](https://rickt.io/posts/09-load-balancing-a-fastapi-app-with-nginx-and-docker/)
 
 ### Wat is load balancing?
 
