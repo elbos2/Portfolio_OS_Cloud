@@ -1,0 +1,147 @@
+---
+- name: Reset Docker en deploy MySQL subnetten op mgr1
+  hosts: mgr1
+  become: true
+  gather_facts: false
+
+  vars:
+    compose_dest: /home/ubuntu/mysql-subnets
+
+  tasks:
+    # ---- Opruimen bestaande staat ----------------------------------------
+    - name: Verwijder containers
+      ansible.builtin.shell: docker rm -f $(docker ps -aq) 2>/dev/null || true
+      changed_when: false
+
+    - name: Verwijder alle Docker netwerken (behalve standaard)
+      ansible.builtin.shell: |
+        docker network ls --format '{{.ID}}' | while read id; do
+          docker network rm $id 2>/dev/null || true
+        done
+      changed_when: false
+
+    - name: Stop Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: stopped
+
+    - name: Verwijder alle stale bridge interfaces
+      ansible.builtin.shell: |
+        for br in $(ip link show type bridge | grep -oP '(?<=\d: )[^:@]+' | grep 'br-'); do
+          ip link set $br down 2>/dev/null || true
+          ip link delete $br 2>/dev/null || true
+        done
+      changed_when: false
+
+    - name: Verwijder Docker state
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/docker/network
+        - /var/lib/docker/containers
+
+    - name: Start Docker opnieuw
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+
+    - name: Wacht tot Docker klaar is
+      ansible.builtin.shell: |
+        for i in $(seq 1 30); do
+          docker info > /dev/null 2>&1 && exit 0
+          sleep 2
+        done
+        exit 1
+      changed_when: false
+
+    # ---- Deploy MySQL containers -----------------------------------------
+    - name: Doelmap aanmaken
+      ansible.builtin.file:
+        path: "{{ compose_dest }}"
+        state: directory
+        owner: ubuntu
+        mode: '0755'
+
+    - name: Docker Compose bestand kopiëren
+      ansible.builtin.copy:
+        src: ../docker/mysql-subnets/docker-compose.yml
+        dest: "{{ compose_dest }}/docker-compose.yml"
+        owner: ubuntu
+        mode: '0644'
+
+    - name: MySQL containers starten
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ compose_dest }}"
+
+    - name: Wachten tot MySQL1 klaar is (poort 3306)
+      ansible.builtin.wait_for:
+        port: 3306
+        host: 127.0.0.1
+        delay: 15
+        timeout: 120
+
+    - name: Wachten tot MySQL2 klaar is (poort 3307)
+      ansible.builtin.wait_for:
+        port: 3307
+        host: 127.0.0.1
+        delay: 5
+        timeout: 120
+
+    # ---- Connectiviteitstest VOOR fix ------------------------------------
+    - name: Test mysql1 -> mysql2 VOOR fix
+      ansible.builtin.shell: >
+        docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret
+        --connect-timeout=3 ping 2>/dev/null
+        && echo "BEREIKBAAR" || echo "NIET BEREIKBAAR (aparte subnetten)"
+      register: result_before
+      changed_when: false
+      ignore_errors: true
+
+    - name: Resultaat VOOR fix
+      ansible.builtin.debug:
+        msg: "mysql1 -> mysql2: {{ result_before.stdout }}"
+
+    # ---- Fix: mysql1 verbinden met subnet-b ------------------------------
+    - name: Verwijder eventueel stale endpoint
+      ansible.builtin.shell: docker network disconnect mysql-subnets_subnet-b mysql1 2>/dev/null || true
+      changed_when: false
+
+    - name: Voeg mysql1 toe aan subnet-b
+      ansible.builtin.command: docker network connect mysql-subnets_subnet-b mysql1
+      changed_when: true
+
+    - name: Wacht tot netwerk actief is
+      ansible.builtin.pause:
+        seconds: 5
+
+    # ---- Connectiviteitstest NA fix -------------------------------------
+    - name: Test mysql1 -> mysql2 NA fix
+      ansible.builtin.shell: >
+        docker exec mysql1 mysqladmin -h 192.168.101.10 -u root -psecret
+        --connect-timeout=5 ping 2>/dev/null
+        && echo "BEREIKBAAR" || echo "NIET BEREIKBAAR"
+      register: result_after
+      changed_when: false
+      ignore_errors: true
+
+    - name: Test mysql2 -> mysql1 NA fix
+      ansible.builtin.shell: >
+        docker exec mysql2 mysqladmin -h 192.168.100.10 -u root -psecret
+        --connect-timeout=5 ping 2>/dev/null
+        && echo "BEREIKBAAR" || echo "NIET BEREIKBAAR"
+      register: result_reverse
+      changed_when: false
+      ignore_errors: true
+
+    # ---- Samenvatting ---------------------------------------------------
+    - name: Samenvatting
+      ansible.builtin.debug:
+        msg:
+          - "=== SAMENVATTING ==="
+          - "mysql1 vanuit host (3306):  {{ 'OK' if (result_before is defined) else 'CHECK' }}"
+          - "mysql2 vanuit host (3307):  OK"
+          - "mysql1->mysql2 voor fix:    {{ result_before.stdout }}"
+          - "mysql1->mysql2 na fix:      {{ result_after.stdout }}"
+          - "mysql2->mysql1 na fix:      {{ result_reverse.stdout }}"
