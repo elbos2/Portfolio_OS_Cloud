@@ -52,6 +52,14 @@
         exit 1
       changed_when: false
 
+    - name: Zet bridge-nf-call-iptables uit (bridged traffic bypass iptables)
+      ansible.builtin.sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: '0'
+        state: present
+        sysctl_set: true
+        reload: true
+
     # ---- Deploy MySQL containers -----------------------------------------
     - name: Doelmap aanmaken
       ansible.builtin.file:
@@ -123,9 +131,9 @@
       changed_when: false
       ignore_errors: true
 
-    - name: Test mysql2 -> mysql1 NA fix
+    - name: Test mysql2 -> mysql1 NA fix (via subnet-b, Docker DNS)
       ansible.builtin.shell: >
-        docker exec mysql2 mysqladmin -h 192.168.100.10 -u root -psecret
+        docker exec mysql2 mysqladmin -h mysql1 -u root -psecret
         --connect-timeout=5 ping 2>/dev/null
         && echo "BEREIKBAAR" || echo "NIET BEREIKBAAR"
       register: result_reverse
