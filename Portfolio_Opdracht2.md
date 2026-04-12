@@ -433,4 +433,10 @@ docker compose down
 
 ### Bewijs
 
-*Screenshots en screen recording toevoegen na uitvoering.*
+**Eerste poging — hostname wisselt niet (nginx cached DNS bij opstarten):**
+
+[Opdracht2_deel3_nginxFail.mp4](docs/videos/Opdracht2_deel3_nginxFail.mp4)
+
+**Na fix — round-robin werkt, hostname wisselt per request:**
+
+[Opdracht2_deel3_nginx.mp4](docs/videos/Opdracht2_deel3_nginx.mp4)
