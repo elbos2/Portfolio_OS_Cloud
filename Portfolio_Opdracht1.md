@@ -6,6 +6,7 @@
    - [Ceph storage](#12-ceph-storage)
    - [Monitoring — Netdata + Grafana](#13-monitoring--netdata--grafana)
 2. [Klant 2 — WordPress op VM's met hoge beschikbaarheid](#2-klant-2--wordpress-op-vms-met-hoge-beschikbaarheid)
+   - [2.4 Proxmox HA configuratie en failover test](#24-proxmox-ha-configuratie-en-failover-test)
 3. [Klant 1 — WordPress op LXC containers](#3-klant-1--wordpress-op-lxc-containers)
 
 ---
@@ -87,9 +88,7 @@ ansible-playbook scripts/ansible/install_grafana_prometheus.yml -i scripts/ansib
 
 **Grafana dashboard:** `http://10.24.40.11:3000` (login: admin/admin bij eerste gebruik)
 
-<!-- Screenshots toevoegen na maken: -->
-<!-- ![Grafana dashboard](docs/screenshots/7h_Grafana_Dashboard.png) -->
-<!-- ![Grafana nodes](docs/screenshots/7i_Grafana_Nodes.png) -->
+**Opmerking:** Grafana is geïnstalleerd en geconfigureerd, maar niet volledig uitgewerkt wegens tijdgebrek. De Netdata monitoring (sectie 1.3) dekt de monitoring vereisten volledig af.
 
 ---
 
@@ -174,6 +173,42 @@ ansible-playbook scripts/ansible/install_netdata_wordpress.yml -i scripts/ansibl
 ![Netdata op VM's](docs/screenshots/10l_Wordpress_Netdata.png)
 
 ![Netdata op VM's bevestiging](docs/screenshots/10m_Wordpress_Netdata.png)
+
+### 2.4 Proxmox HA configuratie en failover test
+
+#### Wat is Proxmox HA?
+
+Proxmox HA (High Availability) zorgt ervoor dat VM's automatisch herstart worden op een andere node als de node waarop ze draaien uitvalt. Dit wordt beheerd door de Proxmox HA Manager, die via quorum en de LRM (Local Resource Manager) op elke node de staat van VM's bewaakt.
+
+#### Opzet
+
+Drie WordPress VM's toegevoegd als HA resources via **Datacenter → HA → Resources → Add**:
+
+| VM | Node | State |
+|----|------|-------|
+| vm:101 (wordpress-21) | pve-node1 | started |
+| vm:103 (wordpress-23) | pve-node2 | started |
+| vm:105 (wordpress-25) | pve-node3 | started |
+
+Instellingen per VM: Max. Restart: 1, Max. Relocate: 1, Failback: true.
+
+#### Failover test
+
+pve-node3 uitgeschakeld via SSH om een node-uitval te simuleren. Proxmox HA heeft vm:105 (wordpress-25) automatisch gemigreerd naar pve-node1 en herstart.
+
+#### Bewijs
+
+**HA resources geconfigureerd (alle 3 VM's started):**
+
+![HA configuratie](docs/screenshots/13a_HASetup.png)
+
+**vm:105 automatisch gemigreerd naar pve-node1 na uitval pve-node3:**
+
+![HA failover resultaat](docs/screenshots/13b_HAVM105node1.png)
+
+**Video — failover in real-time:**
+
+[Opdracht1_HA_VM105.mp4](docs/videos/Opdracht1_HA_VM105.mp4)
 
 ---
 
