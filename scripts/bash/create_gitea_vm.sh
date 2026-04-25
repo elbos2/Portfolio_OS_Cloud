@@ -32,9 +32,6 @@ qm set ${VMID} \
   --memory 2048 \
   --onboot 1
 
-echo "=== Vergroot disk naar 20GB ==="
-qm resize ${VMID} scsi0 20G
-
 echo "=== Stel Cloud-Init in ==="
 qm set ${VMID} \
   --ipconfig0 ip=${VM_IP}/24,gw=${GATEWAY} \
