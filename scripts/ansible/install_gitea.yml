@@ -1,0 +1,114 @@
+---
+- name: Installeer Gitea
+  hosts: gitea
+  become: true
+  vars:
+    gitea_version: "1.22.3"
+    gitea_user: git
+    gitea_home: /home/git
+    gitea_data: /var/lib/gitea
+    gitea_config: /etc/gitea
+    gitea_domain: "10.24.40.40"
+    gitea_port: 3000
+
+  tasks:
+    - name: Maak gitea systeemgebruiker aan
+      user:
+        name: "{{ gitea_user }}"
+        system: true
+        shell: /bin/bash
+        home: "{{ gitea_home }}"
+        create_home: true
+
+    - name: Maak benodigde mappen aan
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ gitea_user }}"
+        group: "{{ gitea_user }}"
+        mode: "0750"
+      loop:
+        - "{{ gitea_data }}"
+        - "{{ gitea_data }}/custom"
+        - "{{ gitea_data }}/data"
+        - "{{ gitea_data }}/log"
+        - "{{ gitea_config }}"
+
+    - name: Download Gitea binary
+      get_url:
+        url: "https://github.com/go-gitea/gitea/releases/download/v{{ gitea_version }}/gitea-{{ gitea_version }}-linux-amd64"
+        dest: /usr/local/bin/gitea
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Maak Gitea configuratie aan
+      copy:
+        dest: "{{ gitea_config }}/app.ini"
+        owner: "{{ gitea_user }}"
+        group: "{{ gitea_user }}"
+        mode: "0640"
+        content: |
+          [DEFAULT]
+          RUN_USER = {{ gitea_user }}
+          RUN_MODE = prod
+
+          [server]
+          DOMAIN           = {{ gitea_domain }}
+          HTTP_PORT        = {{ gitea_port }}
+          ROOT_URL         = http://{{ gitea_domain }}:{{ gitea_port }}/
+          DISABLE_SSH      = false
+          SSH_PORT         = 22
+
+          [database]
+          DB_TYPE  = sqlite3
+          PATH     = {{ gitea_data }}/data/gitea.db
+
+          [repository]
+          ROOT = {{ gitea_data }}/data/repositories
+
+          [log]
+          ROOT_PATH = {{ gitea_data }}/log
+          MODE      = file
+          LEVEL     = info
+
+          [security]
+          INSTALL_LOCK   = false
+
+    - name: Maak systemd service aan
+      copy:
+        dest: /etc/systemd/system/gitea.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Gitea
+          After=network.target
+
+          [Service]
+          Type=simple
+          User={{ gitea_user }}
+          Group={{ gitea_user }}
+          WorkingDirectory={{ gitea_data }}
+          ExecStart=/usr/local/bin/gitea web --config {{ gitea_config }}/app.ini
+          Restart=always
+          Environment=USER={{ gitea_user }} HOME={{ gitea_home }} GITEA_WORK_DIR={{ gitea_data }}
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Herlaad systemd en start Gitea
+      systemd:
+        name: gitea
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Wacht totdat Gitea bereikbaar is
+      wait_for:
+        port: "{{ gitea_port }}"
+        host: "{{ gitea_domain }}"
+        timeout: 30
+
+    - name: Gitea draait
+      debug:
+        msg: "Gitea is bereikbaar op http://{{ gitea_domain }}:{{ gitea_port }}"
