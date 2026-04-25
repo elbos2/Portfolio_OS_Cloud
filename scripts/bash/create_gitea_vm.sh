@@ -9,6 +9,7 @@ VMID=400
 VM_NAME="gitea"
 VM_IP="10.24.40.40"
 GATEWAY="10.24.40.1"
+DNS="8.8.8.8"
 STORAGE="ceph-pool"
 NODE="pve-node1"
 CI_USER="ubuntu"
@@ -37,6 +38,7 @@ qm resize ${VMID} scsi0 20G
 echo "=== Stel Cloud-Init in ==="
 qm set ${VMID} \
   --ipconfig0 ip=${VM_IP}/24,gw=${GATEWAY} \
+  --nameserver ${DNS} \
   --ciuser ${CI_USER} \
   --cipassword ${CI_PASSWORD} \
   --sshkeys /root/.ssh/id_rsa.pub
